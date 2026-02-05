@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <LinearLayout
+        android:id="@+id/topStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="60dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_circle_dark_btn"
+            android:paddingHorizontal="4dp"
+            android:text="HD"
+            android:textColor="#FFFFFF"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvTimer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="00:00"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/tvName"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Dad"
+        android:textColor="#FFFFFF"
+        android:textSize="42sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/topStatus" />
+
+    <TextView
+        android:id="@+id/tvNumber"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Mobile +91 78638 63283"
+        android:textColor="#BBBBBB"
+        android:textSize="16sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/tvName" />
+
+    <TextView
+        android:layout_width="140dp"
+        android:layout_height="140dp"
+        android:layout_marginTop="40dp"
+        android:background="@drawable/bg_avatar_brown"
+        android:gravity="center"
+        android:text="D"
+        android:textColor="#FFFFFF"
+        android:textSize="80sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/tvNumber" />
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="250dp"
+        android:background="@drawable/bg_panel_dark"
+        android:padding="24dp"
+        android:layout_margin="16dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <LinearLayout
+            android:id="@+id/btnKeypad"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/btnMute"
+            app:layout_constraintHorizontal_chainStyle="spread">
+
+            <ImageView
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:background="@drawable/bg_circle_dark_btn"
+                android:src="@drawable/ic_keypad"
+                android:padding="16dp"/>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Keypad"
+                android:textColor="#FFFFFF"
+                android:layout_marginTop="8dp"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/btnMute"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center"
+            app:layout_constraintStart_toEndOf="@id/btnKeypad"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/btnSpeaker">
+
+            <ImageView
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:background="@drawable/bg_circle_dark_btn"
+                android:src="@drawable/ic_mic"
+                android:padding="16dp"/>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Mute"
+                android:textColor="#FFFFFF"
+                android:layout_marginTop="8dp"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/btnSpeaker"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center"
+            app:layout_constraintStart_toEndOf="@id/btnMute"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/btnMore">
+
+            <ImageView
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:background="@drawable/bg_circle_dark_btn"
+                android:src="@drawable/ic_speaker"
+                android:padding="16dp"/>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Speaker"
+                android:textColor="#FFFFFF"
+                android:layout_marginTop="8dp"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/btnMore"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center"
+            app:layout_constraintStart_toEndOf="@id/btnSpeaker"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <ImageView
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:background="@drawable/bg_circle_dark_btn"
+                android:src="@drawable/ic_more_vert"
+                android:padding="16dp"/>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="More"
+                android:textColor="#FFFFFF"
+                android:layout_marginTop="8dp"/>
+        </LinearLayout>
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/btnEndCallContainer"
+            android:layout_width="140dp"
+            android:layout_height="68dp"
+            android:layout_marginBottom="32dp"
+            android:background="@drawable/bg_pill_red"
+            android:clickable="true"
+            android:focusable="true"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <ImageView
+                android:id="@+id/btnEndCallIcon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_call_end"
+                app:tint="#FFFFFF"
+                android:rotation="135"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"/>
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
