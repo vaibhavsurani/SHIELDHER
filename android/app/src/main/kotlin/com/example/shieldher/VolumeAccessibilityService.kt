@@ -10,33 +10,59 @@ import android.view.accessibility.AccessibilityEvent
 
 class VolumeAccessibilityService : AccessibilityService() {
 
-    private var pressCount = 0
-    private var lastPressTime = 0L
-    private val resetDelay = 1200L
+    private var isVolumeUpPressed = false
+    private var isPowerPressed = false
+    private val simultaneousWindow = 150L // 150ms window for simultaneous press
+    private var lastPowerPressTime = 0L
+    private var lastVolumeUpPressTime = 0L
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
-        if (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP &&
-            event.action == KeyEvent.ACTION_DOWN) {
+        val action = event.action
+        val keyCode = event.keyCode
+        val now = System.currentTimeMillis()
 
-            val now = System.currentTimeMillis()
-
-            if (now - lastPressTime > resetDelay) {
-                pressCount = 0
+        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
+            if (action == KeyEvent.ACTION_DOWN) {
+                isVolumeUpPressed = true
+                lastVolumeUpPressTime = now
+                checkAndTrigger()
+            } else if (action == KeyEvent.ACTION_UP) {
+                isVolumeUpPressed = false
             }
-
-            pressCount++
-            lastPressTime = now
-
-            if (pressCount == 3) {
-                pressCount = 0
-                triggerFakeCall()
-                return true // 🚫 stops system (dialer, volume)
-            }
-
-            return true // 🚫 block volume change
         }
-        return false
+
+        if (keyCode == KeyEvent.KEYCODE_POWER) {
+             if (action == KeyEvent.ACTION_DOWN) {
+                isPowerPressed = true
+                lastPowerPressTime = now
+                checkAndTrigger()
+            } else if (action == KeyEvent.ACTION_UP) {
+                isPowerPressed = false
+            }
+        }
+        
+        // We rarely want to block these keys unless we are sure we're triggering
+        // return true usually blocks the event from propagating. 
+        // For Power + Volume Up, we probably want to let system handle them if not triggering,
+        // but if triggering, we might want to block. However, Power key is hard to block.
+        return false 
     }
+
+    private fun checkAndTrigger() {
+        val timeDiff = Math.abs(lastPowerPressTime - lastVolumeUpPressTime)
+        
+        // Conditions: Both currently pressed OR pressed within very short window of each other
+        if ((isVolumeUpPressed && isPowerPressed) || (isVolumeUpPressed && (System.currentTimeMillis() - lastPowerPressTime < simultaneousWindow)) || (isPowerPressed && (System.currentTimeMillis() - lastVolumeUpPressTime < simultaneousWindow)) || (timeDiff < simultaneousWindow)) {
+             // Debounce slightly to ensure we don't trigger multiple times for one press combo
+             val now = System.currentTimeMillis()
+             if (now - lastTriggerTime > 2000) { // 2 second cool-down
+                 lastTriggerTime = now
+                 triggerFakeCall()
+             }
+        }
+    }
+
+    private var lastTriggerTime = 0L
 
     private fun triggerFakeCall() {
         Handler(Looper.getMainLooper()).post {
