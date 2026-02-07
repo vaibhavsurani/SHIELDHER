@@ -11,12 +11,14 @@ class SignupScreen extends StatefulWidget {
 
 class _SignupScreenState extends State<SignupScreen> {
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
   final AuthService _authService = AuthService();
   String? _passwordError;
+  String? _usernameError;
 
   void _validatePasswordRealtime(String password) {
     setState(() {
@@ -27,6 +29,7 @@ class _SignupScreenState extends State<SignupScreen> {
   void signup() async {
     // Validate all fields
     if (_nameController.text.trim().isEmpty ||
+        _usernameController.text.trim().isEmpty ||
         _emailController.text.trim().isEmpty ||
         _phoneController.text.trim().isEmpty ||
         _passwordController.text.isEmpty) {
@@ -34,6 +37,29 @@ class _SignupScreenState extends State<SignupScreen> {
         context: context,
         builder: (context) => const AlertDialog(
           title: Text("Please fill all fields"),
+        ),
+      );
+      return;
+    }
+
+    // Validate username format
+    final username = _usernameController.text.trim();
+    if (username.length < 3) {
+      showDialog(
+        context: context,
+        builder: (context) => const AlertDialog(
+          title: Text("Username too short"),
+          content: Text("Username must be at least 3 characters"),
+        ),
+      );
+      return;
+    }
+    if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(username)) {
+      showDialog(
+        context: context,
+        builder: (context) => const AlertDialog(
+          title: Text("Invalid username"),
+          content: Text("Username can only contain letters, numbers, and underscores"),
         ),
       );
       return;
@@ -78,6 +104,7 @@ class _SignupScreenState extends State<SignupScreen> {
         _passwordController.text,
         _nameController.text.trim(),
         _phoneController.text.trim(),
+        _usernameController.text.trim(),
       );
       if (mounted) {
         Navigator.pop(context); // Pop loading
@@ -157,6 +184,39 @@ class _SignupScreenState extends State<SignupScreen> {
                   fillColor: Theme.of(context).colorScheme.secondary,
                   filled: true,
                 ),
+              ),
+
+              const SizedBox(height: 10),
+
+              // Username TextField
+              TextField(
+                controller: _usernameController,
+                decoration: InputDecoration(
+                  hintText: "Username (e.g. john_doe)",
+                  prefixIcon: const Icon(Icons.alternate_email),
+                  helperText: "This will be used to invite you to bubbles",
+                  helperStyle: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                  errorText: _usernameError,
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: Theme.of(context).colorScheme.tertiary),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
+                  ),
+                  fillColor: Theme.of(context).colorScheme.secondary,
+                  filled: true,
+                ),
+                onChanged: (value) {
+                  setState(() {
+                    if (value.length > 0 && value.length < 3) {
+                      _usernameError = 'Username must be at least 3 characters';
+                    } else if (!RegExp(r'^[a-zA-Z0-9_]*$').hasMatch(value)) {
+                      _usernameError = 'Only letters, numbers, and underscores';
+                    } else {
+                      _usernameError = null;
+                    }
+                  });
+                },
               ),
 
               const SizedBox(height: 10),

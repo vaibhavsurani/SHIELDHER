@@ -49,6 +49,7 @@ class AuthService {
     String password, 
     String name,
     String phone,
+    String username,
   ) async {
     try {
       // Create user
@@ -58,13 +59,24 @@ class AuthService {
         data: {
           'name': name,
           'phone': phone,
+          'username': username,
         },
       );
       
-      // Note: Supabase automatically handles user creation in auth.users
-      // Ideally, use a trigger to copy data to public.users table if needed for other queries
-      // For now, we'll try to insert into a 'users' table if it exists and RLS allows
-      // or rely on metadata in auth.users
+      // Create user profile with username for invite-by-username feature
+      if (response.user != null) {
+        try {
+          await _supabase.from('user_profiles').upsert({
+            'user_id': response.user!.id,
+            'username': username.toLowerCase(),
+            'display_name': name,
+            'phone': phone,
+          });
+        } catch (e) {
+          // Profile creation failed, but auth succeeded - log but don't fail
+          print('Warning: Could not create user profile: $e');
+        }
+      }
       
       return response;
     } on AuthException catch (e) {

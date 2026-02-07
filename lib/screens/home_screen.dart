@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -5,6 +6,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shieldher/services/audio_recorder_service.dart';
 import 'package:shieldher/services/emergency_service.dart';
 import 'package:shieldher/screens/emergency_contacts_screen.dart';
+import 'package:shieldher/screens/community_screen.dart';
+import 'package:shieldher/widgets/app_header.dart';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:intl/intl.dart';
@@ -20,11 +23,20 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _currentIndex = 0;
   late AnimationController _pulseController;
+  late AnimationController _orbitController;
   late Animation<double> _pulseAnimation;
   final EmergencyService _emergencyService = EmergencyService();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
-  // Channel for native communication
   static const platform = MethodChannel('com.example.shieldher/methods');
+
+  // Sample member data for orbiting avatars
+  final List<Map<String, dynamic>> _members = [
+    {'name': 'Work', 'color': Colors.orange, 'icon': Icons.work},
+    {'name': 'College', 'color': Colors.blue, 'icon': Icons.school},
+    {'name': 'Home', 'color': Colors.green, 'icon': Icons.home},
+    {'name': 'School', 'color': Colors.purple, 'icon': Icons.menu_book},
+  ];
 
   @override
   void initState() {
@@ -32,359 +44,460 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _pulseController = AnimationController(
       duration: const Duration(milliseconds: 1500),
       vsync: this,
-    )..repeat(reverse: true);
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    )..repeat();
+    _pulseAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeOut),
     );
+
+    _orbitController = AnimationController(
+      duration: const Duration(seconds: 20),
+      vsync: this,
+    )..repeat();
   }
 
   @override
   void dispose() {
     _pulseController.dispose();
+    _orbitController.dispose();
     super.dispose();
+  }
+
+  void _navigateTo(int index) {
+    setState(() => _currentIndex = index);
+    Navigator.pop(context); // Close drawer
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBody: true,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF1A1A2E),
-              Color(0xFF16213E),
-              Color(0xFF0F3460),
-            ],
+      key: _scaffoldKey,
+      backgroundColor: const Color(0xFFFFF8E7), // Malai white
+      drawer: _buildDrawer(),
+      body: IndexedStack(
+        index: _currentIndex,
+        children: [
+          _buildHomeTab(),
+          CommunityScreen(
+            scaffoldKey: _scaffoldKey,
+            onNavigate: (index) => setState(() => _currentIndex = index),
           ),
-        ),
-        child: IndexedStack(
-          index: _currentIndex,
-          children: [
-            _buildHomeTab(),
-            _buildRecordTab(),
-            _buildProfileTab(),
-          ],
-        ),
+          _buildRecordTab(),
+          _buildProfileTab(),
+        ],
       ),
-      bottomNavigationBar: _buildBottomNav(),
     );
   }
 
-  Widget _buildBottomNav() {
-    return Container(
-      margin: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFE91E63).withOpacity(0.3),
-            blurRadius: 20,
-            spreadRadius: 2,
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(30),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(30),
-              border: Border.all(color: Colors.white.withOpacity(0.2)),
+  Widget _buildDrawer() {
+    return Drawer(
+      child: Container(
+        color: const Color(0xFFFFF8E7), // Malai white
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            DrawerHeader(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFFC2185B), Color(0xFFAB47BC)],
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: ClipOval(
+                      child: Image.asset(
+                        'assets/logo.png',
+                        width: 50,
+                        height: 50,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Icon(Icons.shield, size: 36, color: Color(0xFFC2185B)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    "ShieldHer",
+                    style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
             ),
-            child: BottomNavigationBar(
-              currentIndex: _currentIndex,
-              onTap: (index) => setState(() => _currentIndex = index),
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              selectedItemColor: const Color(0xFFE91E63),
-              unselectedItemColor: Colors.white54,
-              type: BottomNavigationBarType.fixed,
-              items: const [
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.home_outlined),
-                  activeIcon: Icon(Icons.home),
-                  label: 'Home',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.mic_outlined),
-                  activeIcon: Icon(Icons.mic),
-                  label: 'Record',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.person_outline),
-                  activeIcon: Icon(Icons.person),
-                  label: 'Profile',
-                ),
-              ],
+            _buildDrawerItem(Icons.home, 'Home', 0),
+            _buildDrawerItem(Icons.map, 'Community', 1),
+            _buildDrawerItem(Icons.mic, 'Record', 2),
+            _buildDrawerItem(Icons.person, 'Profile', 3),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.contacts, color: Color(0xFFC2185B)),
+              title: const Text('Emergency Contacts'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const EmergencyContactsScreen()));
+              },
             ),
-          ),
+            ListTile(
+              leading: const Icon(Icons.settings, color: Color(0xFFC2185B)),
+              title: const Text('Settings'),
+              onTap: () => Navigator.pop(context),
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _buildDrawerItem(IconData icon, String title, int index) {
+    final isSelected = _currentIndex == index;
+    return ListTile(
+      leading: Icon(icon, color: isSelected ? const Color(0xFFC2185B) : Colors.grey),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          color: isSelected ? const Color(0xFFC2185B) : Colors.black87,
+        ),
+      ),
+      selected: isSelected,
+      selectedTileColor: const Color(0xFFC2185B).withOpacity(0.1),
+      onTap: () => _navigateTo(index),
     );
   }
 
   // ==================== HOME TAB ====================
   Widget _buildHomeTab() {
     return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // App Bar
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'ShieldHer',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2,
-                    color: Colors.white,
-                  ),
+      child: Column(
+        children: [
+          AppHeader(scaffoldKey: _scaffoldKey),
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  const SizedBox(height: 40),
+                  _buildSOSRadar(),
+                  const SizedBox(height: 40),
+                  _buildSOSButton(),
+                  const SizedBox(height: 30),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Image.asset(
+                'assets/logo.png',
+                width: 32,
+                height: 32,
+                errorBuilder: (_, __, ___) => const Icon(Icons.favorite, color: Color(0xFFC2185B), size: 28),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                "I'M SAFE",
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFFC2185B),
                 ),
-                Container(
-                  padding: const EdgeInsets.all(8),
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_outlined, color: Colors.black54),
+                onPressed: () {},
+              ),
+              IconButton(
+                icon: const Icon(Icons.menu, color: Colors.black87),
+                onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSOSRadar() {
+    return SizedBox(
+      width: 320,
+      height: 320,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Outer pulse rings
+          ...List.generate(3, (index) {
+            return AnimatedBuilder(
+              animation: _pulseController,
+              builder: (context, child) {
+                final delay = index * 0.3;
+                final animValue = ((_pulseController.value + delay) % 1.0);
+                return Container(
+                  width: 160 + (animValue * 160),
+                  height: 160 + (animValue * 160),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: const Color(0xFFC2185B).withOpacity(0.3 * (1 - animValue)),
+                      width: 2,
+                    ),
                   ),
-                  child: const Icon(Icons.notifications_outlined, color: Colors.white),
+                );
+              },
+            );
+          }),
+          // Pink gradient background circle
+          Container(
+            width: 180,
+            height: 180,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  const Color(0xFFC2185B).withOpacity(0.15),
+                  const Color(0xFFC2185B).withOpacity(0.05),
+                ],
+              ),
+            ),
+          ),
+          // Center bell icon
+          Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFC2185B), Color(0xFFD81B60)],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFC2185B).withOpacity(0.4),
+                  blurRadius: 20,
+                  spreadRadius: 5,
                 ),
               ],
             ),
-            const SizedBox(height: 40),
+            child: const Icon(Icons.notifications_active, color: Colors.white, size: 40),
+          ),
+          // Orbiting member avatars
+          AnimatedBuilder(
+            animation: _orbitController,
+            builder: (context, child) {
+              return Stack(
+                alignment: Alignment.center,
+                children: List.generate(_members.length, (index) {
+                  final angle = (2 * pi * index / _members.length) + (_orbitController.value * 2 * pi);
+                  final radius = 130.0;
+                  final x = radius * cos(angle);
+                  final y = radius * sin(angle);
+                  final member = _members[index];
 
-            // Status Shield with Pulse Animation
-            Center(
-              child: AnimatedBuilder(
-                animation: _pulseAnimation,
-                builder: (context, child) {
-                  return Transform.scale(
-                    scale: _pulseAnimation.value,
-                    child: child,
-                  );
-                },
-                child: Container(
-                  width: 180,
-                  height: 180,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Color(0xFFE91E63),
-                        Color(0xFFAB47BC),
-                      ],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFE91E63).withOpacity(0.5),
-                        blurRadius: 40,
-                        spreadRadius: 10,
-                      ),
-                    ],
-                  ),
-                  child: const Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.shield, size: 70, color: Colors.white),
-                      SizedBox(height: 8),
-                      Text(
-                        'PROTECTED',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 2,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 50),
-
-            // Emergency Trigger Card
-            _buildGlassCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.blueAccent.withOpacity(0.3),
-                              Colors.purpleAccent.withOpacity(0.3),
+                  return Transform.translate(
+                    offset: Offset(x, y),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.black87,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.location_on, color: Colors.white, size: 12),
+                              const SizedBox(width: 2),
+                              Text(
+                                member['name'],
+                                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                              ),
                             ],
                           ),
-                          borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(Icons.volume_up, color: Colors.blueAccent),
-                      ),
-                      const SizedBox(width: 16),
-                      const Text(
-                        'Emergency Trigger',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                        const SizedBox(height: 4),
+                        Container(
+                          width: 50,
+                          height: 50,
+                          decoration: BoxDecoration(
+                            color: member['color'],
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 3),
+                            boxShadow: [
+                              BoxShadow(
+                                color: (member['color'] as Color).withOpacity(0.3),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                          child: Icon(member['icon'], color: Colors.white, size: 24),
                         ),
+                      ],
+                    ),
+                  );
+                }),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSOSButton() {
+    return GestureDetector(
+      onTap: _sendSOS,
+      child: Container(
+        width: 200,
+        padding: const EdgeInsets.symmetric(vertical: 18),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFFC2185B), Color(0xFFD81B60)],
+          ),
+          borderRadius: BorderRadius.circular(30),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFC2185B).withOpacity(0.4),
+              blurRadius: 15,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: const Center(
+          child: Text(
+            'SOS',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 4,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ==================== RECORD TAB ====================
+  Widget _buildRecordTab() {
+    return _RecordTabContent(scaffoldKey: _scaffoldKey);
+  }
+
+  // ==================== PROFILE TAB ====================
+  Widget _buildProfileTab() {
+    final user = Supabase.instance.client.auth.currentUser;
+    return SafeArea(
+      child: Column(
+        children: [
+          AppHeader(scaffoldKey: _scaffoldKey),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFC2185B), Color(0xFFAB47BC)],
                       ),
-                    ],
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFC2185B).withOpacity(0.3),
+                          blurRadius: 15,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(Icons.person, color: Colors.white, size: 50),
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Press Power and Volume Up buttons simultaneously to activate the Fake Call screen secretly.',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.7),
-                      height: 1.5,
+                    user?.email ?? 'User',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 40),
+                  _buildProfileOption(Icons.phone, 'Fake Call', _testFakeCall),
+                  _buildProfileOption(Icons.location_on, 'Share Location', _shareLocation),
+                  _buildProfileOption(Icons.contacts, 'Emergency Contacts', _openEmergencyContacts),
+                  _buildProfileOption(Icons.settings, 'Settings', () {}),
+                  const SizedBox(height: 20),
+                  ElevatedButton.icon(
+                    onPressed: _logout,
+                    icon: const Icon(Icons.logout),
+                    label: const Text('Logout'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red.shade100,
+                      foregroundColor: Colors.red,
+                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                     ),
                   ),
                 ],
               ),
             ),
-
-            const SizedBox(height: 20),
-
-            // Quick Actions
-            Row(
-              children: [
-                Expanded(
-                  child: _buildQuickActionCard(
-                    icon: Icons.call,
-                    label: 'Fake Call',
-                    color: const Color(0xFFE91E63),
-                    onTap: _testFakeCall,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildQuickActionCard(
-                    icon: Icons.location_on,
-                    label: 'Share Location',
-                    color: Colors.orangeAccent,
-                    onTap: _shareLocation,
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 12),
-
-            Row(
-              children: [
-                Expanded(
-                  child: _buildQuickActionCard(
-                    icon: Icons.contacts,
-                    label: 'Emergency\nContacts',
-                    color: Colors.greenAccent,
-                    onTap: _openEmergencyContacts,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildQuickActionCard(
-                    icon: Icons.sos,
-                    label: 'SOS Alert',
-                    color: Colors.redAccent,
-                    onTap: _sendSOS,
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 100), // Space for bottom nav
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGlassCard({required Widget child}) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withOpacity(0.2)),
           ),
-          child: child,
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildQuickActionCard({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: ClipRRect(
+  Widget _buildProfileOption(IconData icon, String title, VoidCallback onTap) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withOpacity(0.1)),
-            ),
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(icon, color: color, size: 28),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10),
+        ],
+      ),
+      child: ListTile(
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFC2185B).withOpacity(0.1),
+            borderRadius: BorderRadius.circular(10),
           ),
+          child: Icon(icon, color: const Color(0xFFC2185B)),
         ),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
+        trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+        onTap: onTap,
       ),
     );
   }
 
+  // ==================== ACTIONS ====================
   Future<void> _testFakeCall() async {
     try {
       await platform.invokeMethod('startFakeCall');
     } on PlatformException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Failed to trigger: ${e.message}")),
+          SnackBar(content: Text("Failed: ${e.message}")),
         );
       }
     }
@@ -392,665 +505,340 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Future<void> _shareLocation() async {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Getting your location...'),
-        duration: Duration(seconds: 1),
-      ),
+      const SnackBar(content: Text('Getting location...'), duration: Duration(seconds: 1)),
     );
-
-    final success = await _emergencyService.shareLocation();
-    if (mounted) {
-      if (!success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not get location. Please enable GPS.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
+    await _emergencyService.shareLocation();
   }
 
   void _openEmergencyContacts() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const EmergencyContactsScreen()),
-    );
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const EmergencyContactsScreen()));
   }
 
   Future<void> _sendSOS() async {
-    // Check if there are contacts first
     final contacts = await _emergencyService.getContacts();
     if (contacts.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please add emergency contacts first!'),
-            backgroundColor: Colors.orange,
-          ),
+          const SnackBar(content: Text('Add emergency contacts first!'), backgroundColor: Colors.orange),
         );
         _openEmergencyContacts();
       }
       return;
     }
 
-    // Show confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A2E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Row(
           children: [
-            Icon(Icons.sos, color: Colors.redAccent, size: 28),
+            Icon(Icons.sos, color: Colors.red, size: 28),
             SizedBox(width: 12),
-            Text('Send SOS Alert?', style: TextStyle(color: Colors.white)),
+            Text('Send SOS Alert?'),
           ],
         ),
-        content: Text(
-          'This will AUTOMATICALLY send an emergency SMS with your location to ${contacts.length} contact(s).',
-          style: TextStyle(color: Colors.white.withAlpha(180)),
-        ),
+        content: Text('Send emergency SMS to ${contacts.length} contact(s)?'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel', style: TextStyle(color: Colors.white.withAlpha(180))),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            child: const Text('SEND SOS NOW'),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('SEND SOS', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
 
     if (confirmed == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sending SOS...'), duration: Duration(seconds: 2)),
+      );
+      await _emergencyService.sendSOSAutomatic();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
-              children: [
-                SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                ),
-                SizedBox(width: 16),
-                Text('Sending SOS to emergency contacts...'),
-              ],
-            ),
-            duration: Duration(seconds: 5),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
-
-      final success = await _emergencyService.sendSOSAutomatic();
-      if (mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              success
-                  ? '✓ SOS sent to ${contacts.length} contact(s)!'
-                  : 'SMS app opened. Please send the message.',
-            ),
-            backgroundColor: success ? Colors.green : Colors.orange,
-          ),
+          const SnackBar(content: Text('SOS sent successfully!'), backgroundColor: Colors.green),
         );
       }
     }
   }
 
-  // ==================== RECORD TAB ====================
-  Widget _buildRecordTab() {
-    return const _RecordTabContent();
-  }
-
-  // ==================== PROFILE TAB ====================
-  Widget _buildProfileTab() {
-    final user = Supabase.instance.client.auth.currentUser;
-
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-        child: Column(
-          children: [
-            const SizedBox(height: 20),
-
-            // Profile Header
-            Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFE91E63), Color(0xFFAB47BC)],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFE91E63).withOpacity(0.4),
-                    blurRadius: 20,
-                    spreadRadius: 5,
-                  ),
-                ],
-              ),
-              child: const Icon(Icons.person, size: 60, color: Colors.white),
-            ),
-
-            const SizedBox(height: 20),
-
-            Text(
-              user?.email ?? 'User',
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-
-            const SizedBox(height: 8),
-
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Text(
-                'Protected',
-                style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.w600),
-              ),
-            ),
-
-            const SizedBox(height: 40),
-
-            // Settings List
-            _buildSettingsItem(
-              icon: Icons.notifications_outlined,
-              title: 'Notifications',
-              onTap: () {},
-            ),
-            _buildSettingsItem(
-              icon: Icons.security_outlined,
-              title: 'Privacy & Security',
-              onTap: () {},
-            ),
-            _buildSettingsItem(
-              icon: Icons.people_outline,
-              title: 'Emergency Contacts',
-              onTap: () {},
-            ),
-            _buildSettingsItem(
-              icon: Icons.help_outline,
-              title: 'Help & Support',
-              onTap: () {},
-            ),
-            _buildSettingsItem(
-              icon: Icons.info_outline,
-              title: 'About',
-              onTap: () {},
-            ),
-
-            const SizedBox(height: 20),
-
-            // Logout Button
-            GestureDetector(
-              onTap: () async {
-                await Supabase.instance.client.auth.signOut();
-              },
-              child: _buildGlassCard(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.logout, color: Colors.red.shade300),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Logout',
-                      style: TextStyle(
-                        color: Colors.red.shade300,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // App Version
-            Text(
-              'ShieldHer v1.0.0',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.4),
-                fontSize: 12,
-              ),
-            ),
-
-            const SizedBox(height: 100),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSettingsItem({
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withOpacity(0.1)),
-              ),
-              child: Row(
-                children: [
-                  Icon(icon, color: Colors.white70),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ),
-                  const Icon(Icons.chevron_right, color: Colors.white38),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+  Future<void> _logout() async {
+    await Supabase.instance.client.auth.signOut();
   }
 }
 
-// ==================== RECORD TAB CONTENT (Separate StatefulWidget) ====================
+// ==================== RECORD TAB WIDGET ====================
 class _RecordTabContent extends StatefulWidget {
-  const _RecordTabContent();
+  final GlobalKey<ScaffoldState> scaffoldKey;
+  const _RecordTabContent({required this.scaffoldKey});
 
   @override
   State<_RecordTabContent> createState() => _RecordTabContentState();
 }
 
-class _RecordTabContentState extends State<_RecordTabContent>
-    with SingleTickerProviderStateMixin {
-  final AudioRecorderService _recorderService = AudioRecorderService();
-  final AudioPlayer _audioPlayer = AudioPlayer();
+class _RecordTabContentState extends State<_RecordTabContent> {
+  final AudioRecorderService _recorder = AudioRecorderService();
+  final AudioPlayer _player = AudioPlayer();
   bool _isRecording = false;
-  bool _isUploading = false;
-  int _duration = 0;
-  String? _playingUrl;
-  late AnimationController _recordingAnimController;
 
   @override
   void initState() {
     super.initState();
-    _recordingAnimController = AnimationController(
-      duration: const Duration(milliseconds: 800),
-      vsync: this,
-    )..repeat(reverse: true);
-
-    _recorderService.durationStream.listen((duration) {
-      if (mounted) {
-        setState(() => _duration = duration);
-      }
-    });
-
-    _audioPlayer.onPlayerComplete.listen((event) {
-      if (mounted) {
-        setState(() => _playingUrl = null);
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _recordingAnimController.dispose();
-    _recorderService.dispose();
-    _audioPlayer.dispose();
-    super.dispose();
-  }
-
-  Future<void> _playRecording(String url) async {
-    try {
-      if (_playingUrl == url) {
-        await _audioPlayer.stop();
-        setState(() => _playingUrl = null);
-      } else {
-        await _audioPlayer.play(UrlSource(url));
-        setState(() => _playingUrl = url);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Playback failed: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
-  Future<void> _openMap(double lat, double lng) async {
-    final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
-    try {
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not launch maps')),
-          );
-        }
-      }
-    } catch (e) {
-      print('Error launching map: $e');
-    }
   }
 
   Future<void> _toggleRecording() async {
     if (_isRecording) {
-      // Stop recording
+      final url = await _recorder.stopRecording();
       setState(() => _isRecording = false);
-      _recordingAnimController.stop();
-
-      final path = await _recorderService.stopRecording();
-      if (path != null) {
-        setState(() => _isUploading = true);
+      if (url != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Recording saved!'), backgroundColor: Colors.green),
+        );
+        // Upload to Supabase
         try {
-          await _recorderService.uploadToSupabase(path);
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Recording uploaded successfully!'),
-                backgroundColor: Colors.green,
-              ),
-            );
-          }
+          await _recorder.uploadToSupabase(url);
         } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Upload failed: $e'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
+          print('Upload error: $e');
         }
-        setState(() => _isUploading = false);
       }
     } else {
-      // Start recording
-      try {
-        await _recorderService.startRecording();
-        setState(() {
-          _isRecording = true;
-          _duration = 0;
-        });
-        _recordingAnimController.repeat(reverse: true);
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
+      await _recorder.startRecording();
+      setState(() => _isRecording = true);
+    }
+  }
+
+  Future<void> _playRecording(String url) async {
+    await _player.play(UrlSource(url));
+  }
+
+  Future<void> _openMap(double lat, double lng) async {
+    final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFF8FFF8), Color(0xFFE8F5E9)],
+          ),
+        ),
         child: Column(
           children: [
-            const SizedBox(height: 10),
-
-            const Text(
-              'Voice Recording',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            
-            const SizedBox(height: 20),
-
-            // Recording UI (Compact)
-            if (_isUploading)
-               const Column(
-                 children: [
-                   CircularProgressIndicator(color: Color(0xFFE91E63)),
-                   SizedBox(height: 16),
-                   Text('Uploading...', style: TextStyle(color: Colors.white70)),
-                 ],
-               )
-            else
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  // Timer
-                   Column(
-                     children: [
-                       Text(
-                        '00:${_duration.toString().padLeft(2, '0')}',
-                        style: const TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          fontFeatures: [FontFeature.tabularFigures()],
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                       Text(
-                        _isRecording ? 'Recording...' : 'Ready',
-                        style: TextStyle(
-                          color: _isRecording ? Colors.redAccent : Colors.white60,
-                          fontSize: 14,
-                        ),
-                      ),
-                     ],
-                   ),
-
-                  // Record Button
-                  GestureDetector(
-                    onTap: _isUploading ? null : _toggleRecording,
-                    child: AnimatedBuilder(
-                      animation: _recordingAnimController,
-                      builder: (context, child) {
-                        return Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: _isRecording
-                                ? Colors.red.withOpacity(0.2)
-                                : const Color(0xFFE91E63).withOpacity(0.2),
-                            border: Border.all(
-                              color: _isRecording
-                                  ? Colors.red.withOpacity(_recordingAnimController.value)
-                                  : const Color(0xFFE91E63).withOpacity(0.5),
-                              width: 2,
-                            ),
-                            boxShadow: _isRecording
-                                ? [
-                                    BoxShadow(
-                                      color: Colors.red.withOpacity(0.5),
-                                      blurRadius: 20 * _recordingAnimController.value,
-                                      spreadRadius: 5 * _recordingAnimController.value,
-                                    )
-                                  ]
-                                : [],
-                          ),
-                          child: Icon(
-                            _isRecording ? Icons.stop : Icons.mic,
-                            size: 32,
-                            color: _isRecording ? Colors.red : const Color(0xFFE91E63),
-                          ),
+            AppHeader(scaffoldKey: widget.scaffoldKey),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Record',
+                      style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'In case of an emergency, document a situation confidentially.',
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildRecordingCard(),
+                    const SizedBox(height: 30),
+                    _buildStartButton(),
+                    const SizedBox(height: 30),
+                    const Text(
+                      'Recent Recordings',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 12),
+                    StreamBuilder<List<Map<String, dynamic>>>(
+                      stream: _recorder.getRecordings(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                          return Text('No recordings yet', style: TextStyle(color: Colors.grey.shade500));
+                        }
+                        final recordings = snapshot.data!.take(5).toList();
+                        return Column(
+                          children: recordings.map((r) => _buildRecordingItem(r)).toList(),
                         );
                       },
                     ),
-                  ),
-                ],
-              ),
-
-            const SizedBox(height: 30),
-            Divider(color: Colors.white.withOpacity(0.1)),
-            const SizedBox(height: 10),
-
-            // Recordings List Header
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Recent Recordings',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.9),
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+                  ],
                 ),
-              ),
-            ),
-            const SizedBox(height: 10),
-
-            // Recordings List
-            Expanded(
-              child: StreamBuilder<List<Map<String, dynamic>>>(
-                stream: _recorderService.getRecordings(),
-                builder: (context, snapshot) {
-                  if (snapshot.hasError) {
-                    return Center(child: Text('Error loading recordings: ${snapshot.error}', style: TextStyle(color: Colors.red.shade300)));
-                  }
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
-                  final docs = snapshot.data ?? [];
-                  if (docs.isEmpty) {
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.mic_none, size: 48, color: Colors.white.withOpacity(0.2)),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No recordings yet',
-                            style: TextStyle(color: Colors.white.withOpacity(0.5)),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-
-                  return ListView.builder(
-                    itemCount: docs.length,
-                    padding: const EdgeInsets.only(bottom: 100), // Space for nav bar
-                    itemBuilder: (context, index) {
-                      final data = docs[index];
-                      final url = data['url'] as String;
-                      final fileName = data['file_name'] as String? ?? 'Audio Recording'; // Note: field name in DB is file_name
-                      // Supabase returns ISO 8601 string for timestamps
-                      final createdAtStr = data['created_at'] as String?;
-                      final dateStr = createdAtStr != null
-                          ? DateFormat('MMM d, h:mm a').format(DateTime.parse(createdAtStr).toLocal())
-                          : 'Just now';
-                      final isPlaying = _playingUrl == url;
-                      final id = data['id'].toString();
-
-                      return Dismissible(
-                        key: Key(id),
-                        background: Container(
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 20),
-                          margin: const EdgeInsets.only(bottom: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(0.8),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Icon(Icons.delete, color: Colors.white),
-                        ),
-                        direction: DismissDirection.endToStart,
-                        onDismissed: (_) {
-                           _recorderService.deleteRecording(id, url);
-                           // Optimistic update handled by stream
-                        },
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: isPlaying ? const Color(0xFFE91E63) : Colors.transparent,
-                            ),
-                          ),
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            leading: Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: isPlaying ? const Color(0xFFE91E63).withOpacity(0.2) : Colors.white.withOpacity(0.1),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                isPlaying ? Icons.pause : Icons.play_arrow,
-                                color: isPlaying ? const Color(0xFFE91E63) : Colors.white,
-                              ),
-                            ),
-                            title: Text(
-                              fileName,
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                            ),
-                            subtitle: Text(
-                              dateStr,
-                              style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12),
-                            ),
-                            trailing: (data['latitude'] != null && data['longitude'] != null)
-                                ? IconButton(
-                                    icon: const Icon(Icons.map, color: Colors.blueAccent),
-                                    onPressed: () {
-                                      _openMap(
-                                        (data['latitude'] as num).toDouble(),
-                                        (data['longitude'] as num).toDouble(),
-                                      );
-                                    },
-                                    tooltip: 'View Location',
-                                  )
-                                : null,
-                            onTap: () => _playRecording(url),
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Image.asset(
+                'assets/logo.png',
+                width: 32,
+                height: 32,
+                errorBuilder: (_, __, ___) => const Icon(Icons.favorite, color: Color(0xFFC2185B), size: 28),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                "I'M SAFE",
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFFC2185B)),
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              IconButton(icon: const Icon(Icons.notifications_outlined, color: Colors.black54), onPressed: () {}),
+              IconButton(
+                icon: const Icon(Icons.menu, color: Colors.black87),
+                onPressed: () => widget.scaffoldKey.currentState?.openDrawer(),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecordingCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 5)),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              color: _isRecording ? Colors.red.shade100 : Colors.grey.shade100,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              _isRecording ? Icons.stop : Icons.mic,
+              color: _isRecording ? Colors.red : Colors.grey,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _isRecording ? 'Recording...' : 'Recording',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'In case of an emergency, document a situation confidentially.',
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          if (_isRecording)
+            Container(
+              width: 12,
+              height: 12,
+              decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStartButton() {
+    return Center(
+      child: GestureDetector(
+        onTap: _toggleRecording,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+          decoration: BoxDecoration(
+            color: _isRecording ? Colors.red : Colors.black87,
+            borderRadius: BorderRadius.circular(30),
+            boxShadow: [
+              BoxShadow(
+                color: (_isRecording ? Colors.red : Colors.black).withOpacity(0.3),
+                blurRadius: 15,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(_isRecording ? Icons.stop : Icons.fiber_manual_record, color: Colors.white, size: 20),
+              const SizedBox(width: 12),
+              Text(
+                _isRecording ? 'Stop Recording' : 'Starting Recording',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecordingItem(Map<String, dynamic> recording) {
+    final url = recording['url'] as String? ?? '';
+    final fileName = recording['file_name'] as String? ?? 'Recording';
+    final createdAt = recording['created_at'] as String?;
+    final lat = recording['latitude'];
+    final lng = recording['longitude'];
+
+    String timeStr = '';
+    if (createdAt != null) {
+      final dt = DateTime.tryParse(createdAt);
+      if (dt != null) timeStr = DateFormat('MMM d, h:mm a').format(dt);
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8)],
+      ),
+      child: ListTile(
+        leading: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: const Color(0xFFC2185B).withOpacity(0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(Icons.play_arrow, color: Color(0xFFC2185B)),
+        ),
+        title: Text(fileName, style: const TextStyle(fontWeight: FontWeight.w500)),
+        subtitle: Text(timeStr, style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+        trailing: (lat != null && lng != null)
+            ? IconButton(
+                icon: const Icon(Icons.map, color: Colors.blueAccent),
+                onPressed: () => _openMap((lat as num).toDouble(), (lng as num).toDouble()),
+              )
+            : null,
+        onTap: () => _playRecording(url),
       ),
     );
   }

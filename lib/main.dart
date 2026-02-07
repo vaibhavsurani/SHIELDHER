@@ -20,10 +20,10 @@ class ShieldHerApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'ShieldHer',
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF121212), // Deep dark background
-        primaryColor: const Color(0xFFE91E63), // Safety Pink/Red
+        scaffoldBackgroundColor: const Color(0xFF121212),
+        primaryColor: const Color(0xFFC2185B),
         colorScheme: const ColorScheme.dark(
-          primary: Color(0xFFE91E63),
+          primary: Color(0xFFC2185B),
           secondary: Color(0xFFAB47BC),
         ),
         useMaterial3: true,
@@ -32,3 +32,4 @@ class ShieldHerApp extends StatelessWidget {
     );
   }
 }
+

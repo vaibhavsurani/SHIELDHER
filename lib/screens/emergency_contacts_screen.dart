@@ -103,7 +103,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFFE91E63)),
+                  borderSide: const BorderSide(color: Color(0xFFC2185B)),
                 ),
                 prefixIcon: const Icon(Icons.person, color: Colors.white54),
               ),
@@ -122,7 +122,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFFE91E63)),
+                  borderSide: const BorderSide(color: Color(0xFFC2185B)),
                 ),
                 prefixIcon: const Icon(Icons.phone, color: Colors.white54),
               ),
@@ -173,7 +173,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFE91E63),
+              backgroundColor: const Color(0xFFC2185B),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -250,7 +250,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
         ),
         child: SafeArea(
           child: _isLoading
-              ? const Center(child: CircularProgressIndicator(color: Color(0xFFE91E63)))
+              ? const Center(child: CircularProgressIndicator(color: Color(0xFFC2185B)))
               : Column(
                   children: [
                     Expanded(
@@ -331,7 +331,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                       height: 50,
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
-                          colors: [Color(0xFFE91E63), Color(0xFFAB47BC)],
+                          colors: [Color(0xFFC2185B), Color(0xFFAB47BC)],
                         ),
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -408,7 +408,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                         colors: [Colors.grey.shade700, Colors.grey.shade800],
                       )
                     : const LinearGradient(
-                        colors: [Color(0xFFE91E63), Color(0xFFAB47BC)],
+                        colors: [Color(0xFFC2185B), Color(0xFFAB47BC)],
                       ),
                 borderRadius: BorderRadius.circular(16),
               ),
