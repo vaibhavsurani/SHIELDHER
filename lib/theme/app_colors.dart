@@ -8,7 +8,7 @@ class AppColors {
   static const Color secondary = Color(0xFFAB47BC);
   
   // Background colors
-  static const Color background = Color(0xFFFFF8E7); // Malai white (cream/off-white)
+  static const Color background = Color(0xFFFFFFFF); // Pure white
   static const Color surface = Color(0xFFFFFCF5); // Slightly lighter cream
   static const Color card = Color(0xFFFFFFFF); // Pure white for cards
   

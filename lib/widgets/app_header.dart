@@ -112,7 +112,7 @@ class AppHeader extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFF0D9), // Malai tint
+                  color: Colors.grey.shade100,
                   shape: BoxShape.circle,
                 ),
                 child: IconButton(

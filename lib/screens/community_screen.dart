@@ -130,7 +130,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
   Widget build(BuildContext context) {
     return SafeArea(
       child: Container(
-        color: const Color(0xFFFFF8E7), // Malai white
+        color: Colors.white,
         child: Column(
           children: [
             AppHeader(

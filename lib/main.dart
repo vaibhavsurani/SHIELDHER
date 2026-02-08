@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shieldher/auth_gate.dart';
+import 'package:shieldher/screens/video_splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,8 +29,12 @@ class ShieldHerApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const AuthGate(),
+      home: const VideoSplashScreen(
+        nextScreen: AuthGate(),
+        videoAsset: 'assets/splash_video.mp4',
+      ),
     );
   }
 }
+
 

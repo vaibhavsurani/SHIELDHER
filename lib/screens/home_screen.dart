@@ -71,7 +71,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     return Scaffold(
       key: _scaffoldKey,
-      backgroundColor: const Color(0xFFFFF8E7), // Malai white
+      backgroundColor: Colors.white,
       drawer: _buildDrawer(),
       body: IndexedStack(
         index: _currentIndex,
@@ -91,7 +91,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildDrawer() {
     return Drawer(
       child: Container(
-        color: const Color(0xFFFFF8E7), // Malai white
+        color: Colors.white,
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
@@ -137,7 +137,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             const Divider(),
             ListTile(
               leading: const Icon(Icons.contacts, color: Color(0xFFC2185B)),
-              title: const Text('Emergency Contacts'),
+              title: const Text('Emergency Contacts', style: TextStyle(color: Colors.black87)),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const EmergencyContactsScreen()));
@@ -145,7 +145,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
             ListTile(
               leading: const Icon(Icons.settings, color: Color(0xFFC2185B)),
-              title: const Text('Settings'),
+              title: const Text('Settings', style: TextStyle(color: Colors.black87)),
               onTap: () => Navigator.pop(context),
             ),
           ],
@@ -436,7 +436,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   const SizedBox(height: 16),
                   Text(
                     user?.email ?? 'User',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
                   ),
                   const SizedBox(height: 40),
                   _buildProfileOption(Icons.phone, 'Fake Call', _testFakeCall),
@@ -483,7 +483,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
           child: Icon(icon, color: const Color(0xFFC2185B)),
         ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.black87)),
         trailing: const Icon(Icons.chevron_right, color: Colors.grey),
         onTap: onTap,
       ),
@@ -597,6 +597,8 @@ class _RecordTabContentState extends State<_RecordTabContent> {
         // Upload to Supabase
         try {
           await _recorder.uploadToSupabase(url);
+          // Refresh the list after upload
+          if (mounted) setState(() {});
         } catch (e) {
           print('Upload error: $e');
         }
@@ -622,13 +624,7 @@ class _RecordTabContentState extends State<_RecordTabContent> {
   Widget build(BuildContext context) {
     return SafeArea(
       child: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFF8FFF8), Color(0xFFE8F5E9)],
-          ),
-        ),
+        color: Colors.white,
         child: Column(
           children: [
             AppHeader(scaffoldKey: widget.scaffoldKey),
@@ -640,7 +636,7 @@ class _RecordTabContentState extends State<_RecordTabContent> {
                   children: [
                     const Text(
                       'Record',
-                      style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                      style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black87),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -654,7 +650,7 @@ class _RecordTabContentState extends State<_RecordTabContent> {
                     const SizedBox(height: 30),
                     const Text(
                       'Recent Recordings',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
                     ),
                     const SizedBox(height: 12),
                     StreamBuilder<List<Map<String, dynamic>>>(
@@ -746,7 +742,7 @@ class _RecordTabContentState extends State<_RecordTabContent> {
               children: [
                 Text(
                   _isRecording ? 'Recording...' : 'Recording',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -774,7 +770,7 @@ class _RecordTabContentState extends State<_RecordTabContent> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
           decoration: BoxDecoration(
-            color: _isRecording ? Colors.red : Colors.black87,
+            color: _isRecording ? Colors.red : const Color(0xFFC2185B),
             borderRadius: BorderRadius.circular(30),
             boxShadow: [
               BoxShadow(
@@ -830,7 +826,7 @@ class _RecordTabContentState extends State<_RecordTabContent> {
           ),
           child: const Icon(Icons.play_arrow, color: Color(0xFFC2185B)),
         ),
-        title: Text(fileName, style: const TextStyle(fontWeight: FontWeight.w500)),
+        title: Text(fileName, style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.black87)),
         subtitle: Text(timeStr, style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
         trailing: (lat != null && lng != null)
             ? IconButton(
