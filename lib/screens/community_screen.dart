@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -97,16 +98,16 @@ class _CommunityScreenState extends State<CommunityScreen> {
     // Load members
     final members = await _communityService.getBubbleMembers(_selectedBubble!.id);
     if (mounted) setState(() => _bubbleMembers = members);
-    print('[Community] Loaded ${members.length} members for bubble ${_selectedBubble!.name}');
+    debugPrint('[Community] Loaded ${members.length} members for bubble ${_selectedBubble!.name}');
 
     // Load locations
     List<LiveLocation> locations = [];
 
     if (_filterMode == 0 || _filterMode == 1) {
       final bubbleLocations = await _locationService.getBubbleMembersLocations(_selectedBubble!.id);
-      print('[Community] Fetched ${bubbleLocations.length} member locations');
+      debugPrint('[Community] Fetched ${bubbleLocations.length} member locations');
       for (var loc in bubbleLocations) {
-        print('[Community]   -> ${loc.displayName}: lat=${loc.latitude}, lng=${loc.longitude}, isLive=${loc.isLive}');
+        debugPrint('[Community]   -> ${loc.displayName}: lat=${loc.latitude}, lng=${loc.longitude}, isLive=${loc.isLive}');
       }
       locations.addAll(bubbleLocations);
     }
@@ -122,7 +123,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
 
     if (mounted) {
       setState(() => _liveLocations = locations);
-      print('[Community] Total locations on map: ${_liveLocations.length}');
+      debugPrint('[Community] Total locations on map: ${_liveLocations.length}');
     }
   }
 
@@ -144,9 +145,9 @@ class _CommunityScreenState extends State<CommunityScreen> {
   }
 
   Future<void> _loadPendingInvites() async {
-    print('Loading pending invites...');
+    debugPrint('Loading pending invites...');
     final invites = await _communityService.getPendingInvites();
-    print('Loaded ${invites.length} pending invites');
+    debugPrint('Loaded ${invites.length} pending invites');
     setState(() => _pendingInvites = invites);
   }
 
@@ -494,7 +495,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                       icon: const Icon(Icons.mail_outline_rounded, size: 22),
                       color: Colors.black87,
                       onPressed: () {
-                        print('Mail button tapped!');
+                        debugPrint('Mail button tapped!');
                         _showPendingInvitesDialog();
                       },
                     ),

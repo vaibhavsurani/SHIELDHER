@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:geolocator/geolocator.dart';
@@ -169,7 +169,7 @@ class AudioRecorderService {
             await _supabase.storage.from('audio_recordings').remove([filePath]);
         }
     } catch (e) {
-        print("Error deleting recording: $e");
+        debugPrint("Error deleting recording: $e");
     }
   }
 

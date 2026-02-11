@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shieldher/screens/home_screen.dart';
 import 'package:shieldher/screens/login_screen.dart';
@@ -42,10 +43,10 @@ class _AuthGateState extends State<AuthGate> {
           'display_name': metadata?['name'] ?? 'User',
           'phone': metadata?['phone'] ?? '',
         });
-        print('User profile created for: ${user.id}');
+        debugPrint('User profile created for: ${user.id}');
       }
     } catch (e) {
-      print('Error syncing user profile: $e');
+      debugPrint('Error syncing user profile: $e');
     }
   }
 

@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart';
@@ -49,7 +50,7 @@ class EmergencyService {
       final List<dynamic> dataList = data as List<dynamic>;
       return dataList.map((json) => EmergencyContact.fromJson(json)).toList();
     } catch (e) {
-      print('Error fetching contacts: $e');
+      debugPrint('Error fetching contacts: $e');
       return [];
     }
   }
@@ -74,7 +75,7 @@ class EmergencyService {
       });
       return true;
     } catch (e) {
-      print('Error adding contact: $e');
+      debugPrint('Error adding contact: $e');
       return false;
     }
   }
@@ -88,7 +89,7 @@ class EmergencyService {
         'phone': phone,
       }).eq('id', id);
     } catch (e) {
-      print('Error updating contact: $e');
+      debugPrint('Error updating contact: $e');
     }
   }
 
@@ -98,7 +99,7 @@ class EmergencyService {
     try {
       await _supabase.from('emergency_contacts').delete().eq('id', id);
     } catch (e) {
-      print('Error deleting contact: $e');
+      debugPrint('Error deleting contact: $e');
     }
   }
 

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
@@ -76,7 +77,7 @@ class AuthService {
           });
         } catch (e) {
           // Profile creation failed, but auth succeeded - log but don't fail
-          print('Warning: Could not create user profile: $e');
+          debugPrint('Warning: Could not create user profile: $e');
         }
       }
       

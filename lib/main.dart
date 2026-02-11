@@ -1,20 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:shieldher/auth_gate.dart';
+import 'package:shieldher/screens/splash_screen.dart';
 
-
-
-
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await Supabase.initialize(
-    url: 'https://ddyqzkpkkdntkbnmiltq.supabase.co',
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRkeXF6a3Bra2RudGtibm1pbHRxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzMzk1NjksImV4cCI6MjA4NTkxNTU2OX0.OqCZOFUHobY9dvDoNATetQBd-ojyqrVffvho6jnPayo',
-  );
-  
-
-
   runApp(const ShieldHerApp());
 }
 
@@ -41,7 +31,7 @@ class ShieldHerApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const AuthGate(),
+      home: const SplashScreen(),
     );
   }
 }

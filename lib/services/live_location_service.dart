@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -60,7 +61,7 @@ class LiveLocationService {
   Future<bool> goLive() async {
     if (_userId == null) return false;
 
-    final hasPermission = await _checkLocationPermission();
+    final hasPermission = await checkLocationPermission();
     if (!hasPermission) return false;
 
     _isLive = true;
@@ -98,9 +99,9 @@ class LiveLocationService {
               'updated_at': DateTime.now().toIso8601String(),
             })
             .eq('user_id', _userId!);
-        print('Successfully went offline');
+        debugPrint('Successfully went offline');
       } catch (e) {
-        print('Error going offline: $e');
+        debugPrint('Error going offline: $e');
       }
     }
   }
@@ -116,7 +117,7 @@ class LiveLocationService {
           'updated_at': DateTime.now().toIso8601String(),
         });
       } catch (e) {
-        print('Error setting helper mode: $e');
+        debugPrint('Error setting helper mode: $e');
       }
     }
   }
@@ -137,7 +138,7 @@ class LiveLocationService {
         'updated_at': DateTime.now().toIso8601String(),
       });
     } catch (e) {
-      print('Error updating location: $e');
+      debugPrint('Error updating location: $e');
     }
   }
 
@@ -149,7 +150,7 @@ class LiveLocationService {
     if (_userId == null) return;
     
     try {
-      final hasPermission = await _checkLocationPermission();
+      final hasPermission = await checkLocationPermission();
       if (!hasPermission) return;
       
       final position = await Geolocator.getCurrentPosition(
@@ -169,31 +170,31 @@ class LiveLocationService {
         'is_helper': _isHelper,
         'updated_at': DateTime.now().toIso8601String(),
       });
-      print('Saved last location for user');
+      debugPrint('Saved last location for user');
     } catch (e) {
-      print('Error saving last location: $e');
+      debugPrint('Error saving last location: $e');
     }
   }
 
   /// Get live locations of bubble members (excludes current user)
   Future<List<LiveLocation>> getBubbleMembersLocations(String bubbleId) async {
     try {
-      print('Fetching members for bubble: $bubbleId');
+      debugPrint('Fetching members for bubble: $bubbleId');
       // First get member user IDs
       final members = await _supabase
           .from('bubble_members')
           .select('user_id')
           .eq('bubble_id', bubbleId);
 
-      print('Raw members found: ${members.length}');
+      debugPrint('Raw members found: ${members.length}');
       final userIds = (members as List).map((m) => m['user_id']).toList();
       
       // Remove current user from the list - we don't need to show ourselves
       userIds.remove(_userId);
-      print('Member IDs after removing current user: ${userIds.length}');
+      debugPrint('Member IDs after removing current user: ${userIds.length}');
       
       if (userIds.isEmpty) {
-        print('No other members in this bubble.');
+        debugPrint('No other members in this bubble.');
         return [];
       }
 
@@ -204,14 +205,14 @@ class LiveLocationService {
           .select('*, user_profiles(display_name, avatar_url)')
           .inFilter('user_id', userIds);
 
-      print('Fetched ${(locations as List).length} location records from DB');
+      debugPrint('Fetched ${(locations as List).length} location records from DB');
       if (locations.isEmpty) {
-         print('WARNING: Other members exist but have no location history yet.');
+         debugPrint('WARNING: Other members exist but have no location history yet.');
       }
       
       return locations.map((l) => LiveLocation.fromJson(l)).toList();
     } catch (e) {
-      print('Error fetching bubble locations: $e');
+      debugPrint('Error fetching bubble locations: $e');
       return [];
     }
   }
@@ -227,7 +228,7 @@ class LiveLocationService {
 
       return (locations as List).map((l) => LiveLocation.fromJson(l)).toList();
     } catch (e) {
-      print('Error fetching helpers: $e');
+      debugPrint('Error fetching helpers: $e');
       return [];
     }
   }
@@ -242,7 +243,7 @@ class LiveLocationService {
 
   // ==================== PERMISSIONS ====================
 
-  Future<bool> _checkLocationPermission() async {
+  Future<bool> checkLocationPermission() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return false;
 
