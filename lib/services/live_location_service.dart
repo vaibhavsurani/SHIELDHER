@@ -90,11 +90,15 @@ class LiveLocationService {
 
     if (_userId != null) {
       try {
-        await _supabase.from('live_locations').upsert({
-          'user_id': _userId,
-          'is_live': false,
-          'updated_at': DateTime.now().toIso8601String(),
-        });
+        // Use UPDATE instead of UPSERT to avoid NOT NULL constraint issues
+        // This only works if user already has a record (which they should after going live)
+        await _supabase.from('live_locations')
+            .update({
+              'is_live': false,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('user_id', _userId!);
+        print('Successfully went offline');
       } catch (e) {
         print('Error going offline: $e');
       }
@@ -139,26 +143,73 @@ class LiveLocationService {
 
   // ==================== FETCH LOCATIONS ====================
 
-  /// Get live locations of bubble members
+  /// Save user's last known location (call once when app starts or periodically)
+  /// This ensures every user has a location record, even if they never go "live"
+  Future<void> saveLastLocation() async {
+    if (_userId == null) return;
+    
+    try {
+      final hasPermission = await _checkLocationPermission();
+      if (!hasPermission) return;
+      
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
+      
+      await _supabase.from('live_locations').upsert({
+        'user_id': _userId,
+        'latitude': position.latitude,
+        'longitude': position.longitude,
+        'speed': 0,
+        'heading': position.heading,
+        'is_live': false, // This is just a background save, not going live
+        'is_helper': _isHelper,
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+      print('Saved last location for user');
+    } catch (e) {
+      print('Error saving last location: $e');
+    }
+  }
+
+  /// Get live locations of bubble members (excludes current user)
   Future<List<LiveLocation>> getBubbleMembersLocations(String bubbleId) async {
     try {
+      print('Fetching members for bubble: $bubbleId');
       // First get member user IDs
       final members = await _supabase
           .from('bubble_members')
           .select('user_id')
           .eq('bubble_id', bubbleId);
 
+      print('Raw members found: ${members.length}');
       final userIds = (members as List).map((m) => m['user_id']).toList();
-      if (userIds.isEmpty) return [];
+      
+      // Remove current user from the list - we don't need to show ourselves
+      userIds.remove(_userId);
+      print('Member IDs after removing current user: ${userIds.length}');
+      
+      if (userIds.isEmpty) {
+        print('No other members in this bubble.');
+        return [];
+      }
 
-      // Get their live locations
+      // Get their locations (both live and last known)
+      // Note: This will only return users who have a record in live_locations table
       final locations = await _supabase
           .from('live_locations')
           .select('*, user_profiles(display_name, avatar_url)')
-          .inFilter('user_id', userIds)
-          .eq('is_live', true);
+          .inFilter('user_id', userIds);
 
-      return (locations as List).map((l) => LiveLocation.fromJson(l)).toList();
+      print('Fetched ${(locations as List).length} location records from DB');
+      if (locations.isEmpty) {
+         print('WARNING: Other members exist but have no location history yet.');
+      }
+      
+      return locations.map((l) => LiveLocation.fromJson(l)).toList();
     } catch (e) {
       print('Error fetching bubble locations: $e');
       return [];

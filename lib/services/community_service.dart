@@ -94,7 +94,20 @@ class CommunityService {
           .select()
           .inFilter('id', bubbleIds);
 
-      return (bubblesData as List).map((b) => Bubble.fromJson(b)).toList();
+      // Fetch member count for each bubble
+      List<Bubble> bubbles = [];
+      for (var b in bubblesData as List) {
+        final countData = await _supabase
+            .from('bubble_members')
+            .select('id')
+            .eq('bubble_id', b['id']);
+        
+        final memberCount = (countData as List).length;
+        b['member_count'] = memberCount;
+        bubbles.add(Bubble.fromJson(b));
+      }
+      
+      return bubbles;
     } catch (e) {
       print('Error fetching bubbles: $e');
       return [];
@@ -169,20 +182,40 @@ class CommunityService {
   /// Get members of a bubble
   Future<List<BubbleMember>> getBubbleMembers(String bubbleId) async {
     try {
-      final data = await _supabase
+      // Step 1: Get raw members
+      final memberData = await _supabase
           .from('bubble_members')
-          .select('*, user_profiles(display_name, avatar_url)')
+          .select()
           .eq('bubble_id', bubbleId);
 
-      return (data as List).map((m) {
-        final profile = m['user_profiles'] as Map<String, dynamic>?;
+      if ((memberData as List).isEmpty) return [];
+
+      // Step 2: Get user IDs
+      final userIds = memberData.map((m) => m['user_id'] as String).toList();
+
+      // Step 3: Fetch profiles
+      final profilesData = await _supabase
+          .from('user_profiles')
+          .select('user_id, display_name, avatar_url')
+          .inFilter('user_id', userIds);
+
+      // Create a map for easy lookup
+      final profileMap = {
+        for (var p in profilesData as List) p['user_id']: p
+      };
+
+      // Step 4: Merge results
+      return memberData.map((m) {
+        final userId = m['user_id'] as String;
+        final profile = profileMap[userId];
+        
         return BubbleMember(
           id: m['id'] as String,
           bubbleId: m['bubble_id'] as String,
-          userId: m['user_id'] as String,
+          userId: userId,
           role: m['role'] as String? ?? 'member',
           joinedAt: DateTime.parse(m['joined_at'] as String),
-          displayName: profile?['display_name'] as String?,
+          displayName: profile?['display_name'] as String? ?? 'Unknown',
           avatarUrl: profile?['avatar_url'] as String?,
         );
       }).toList();
@@ -227,7 +260,9 @@ class CommunityService {
     return 'shieldher://join/$inviteCode';
   }
 
-  /// Invite a user to a bubble by their username
+  // ==================== INVITES ====================
+
+  /// Invite a user to a bubble by their username (creates pending invite)
   Future<bool> inviteByUsername(String bubbleId, String username) async {
     if (_userId == null) return false;
 
@@ -249,6 +284,12 @@ class CommunityService {
 
       final targetUserId = userData['user_id'] as String;
 
+      // Can't invite yourself
+      if (targetUserId == _userId) {
+        print('Cannot invite yourself');
+        return false;
+      }
+
       // Check if user is already a member
       final existingMember = await _supabase
           .from('bubble_members')
@@ -262,11 +303,26 @@ class CommunityService {
         return false;
       }
 
-      // Add user as member
-      await _supabase.from('bubble_members').insert({
+      // Check if there's already a pending invite
+      final existingInvite = await _supabase
+          .from('bubble_invites')
+          .select('id')
+          .eq('bubble_id', bubbleId)
+          .eq('invitee_id', targetUserId)
+          .eq('status', 'pending')
+          .maybeSingle();
+
+      if (existingInvite != null) {
+        print('There is already a pending invite for this user');
+        return false;
+      }
+
+      // Create pending invite
+      await _supabase.from('bubble_invites').insert({
         'bubble_id': bubbleId,
-        'user_id': targetUserId,
-        'role': 'member',
+        'inviter_id': _userId,
+        'invitee_id': targetUserId,
+        'status': 'pending',
       });
 
       return true;
@@ -275,4 +331,146 @@ class CommunityService {
       return false;
     }
   }
+
+  /// Get pending invites for current user
+  Future<List<BubbleInvite>> getPendingInvites() async {
+    if (_userId == null) return [];
+
+    try {
+      // First get all pending invites for this user
+      final inviteData = await _supabase
+          .from('bubble_invites')
+          .select()
+          .eq('invitee_id', _userId!)
+          .eq('status', 'pending');
+
+      print('Pending invites found: ${(inviteData as List).length}');
+
+      List<BubbleInvite> invites = [];
+      for (var invite in inviteData) {
+        // Get bubble info
+        String bubbleName = 'Unknown Bubble';
+        String bubbleIcon = 'family';
+        try {
+          final bubble = await _supabase
+              .from('bubbles')
+              .select('name, icon')
+              .eq('id', invite['bubble_id'])
+              .single();
+          bubbleName = bubble['name'] as String? ?? 'Unknown Bubble';
+          bubbleIcon = bubble['icon'] as String? ?? 'family';
+        } catch (e) {
+          print('Error fetching bubble: $e');
+        }
+
+        // Get inviter name
+        String inviterName = 'Someone';
+        try {
+          final inviter = await _supabase
+              .from('user_profiles')
+              .select('display_name')
+              .eq('user_id', invite['inviter_id'])
+              .single();
+          inviterName = inviter['display_name'] as String? ?? 'Someone';
+        } catch (e) {
+          print('Error fetching inviter: $e');
+        }
+
+        invites.add(BubbleInvite(
+          id: invite['id'] as String,
+          bubbleId: invite['bubble_id'] as String,
+          bubbleName: bubbleName,
+          bubbleIcon: bubbleIcon,
+          inviterName: inviterName,
+          createdAt: DateTime.parse(invite['created_at'] as String),
+        ));
+      }
+
+      return invites;
+    } catch (e) {
+      print('Error fetching pending invites: $e');
+      return [];
+    }
+  }
+
+  /// Accept an invite
+  Future<bool> acceptInvite(String inviteId) async {
+    if (_userId == null) return false;
+
+    try {
+      // Get the invite details
+      final invite = await _supabase
+          .from('bubble_invites')
+          .select('bubble_id')
+          .eq('id', inviteId)
+          .single();
+
+      final bubbleId = invite['bubble_id'] as String;
+
+      // Check if already a member to avoid unique constraint error
+      final existingMember = await _supabase
+          .from('bubble_members')
+          .select('id')
+          .eq('bubble_id', bubbleId)
+          .eq('user_id', _userId!)
+          .maybeSingle();
+
+      if (existingMember == null) {
+         // Add user as member
+         await _supabase.from('bubble_members').insert({
+           'bubble_id': bubbleId,
+           'user_id': _userId,
+           'role': 'member',
+           'joined_at': DateTime.now().toIso8601String(), // Explicitly set join time if needed
+         });
+      }
+
+      // Update invite status
+      await _supabase
+          .from('bubble_invites')
+          .update({'status': 'accepted'})
+          .eq('id', inviteId);
+
+      return true;
+    } catch (e) {
+      print('Error accepting invite: $e');
+      return false;
+    }
+  }
+
+  /// Decline an invite
+  Future<bool> declineInvite(String inviteId) async {
+    if (_userId == null) return false;
+
+    try {
+      await _supabase
+          .from('bubble_invites')
+          .update({'status': 'declined'})
+          .eq('id', inviteId);
+
+      return true;
+    } catch (e) {
+      print('Error declining invite: $e');
+      return false;
+    }
+  }
+}
+
+/// Model for bubble invites
+class BubbleInvite {
+  final String id;
+  final String bubbleId;
+  final String bubbleName;
+  final String bubbleIcon;
+  final String inviterName;
+  final DateTime createdAt;
+
+  BubbleInvite({
+    required this.id,
+    required this.bubbleId,
+    required this.bubbleName,
+    required this.bubbleIcon,
+    required this.inviterName,
+    required this.createdAt,
+  });
 }

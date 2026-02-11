@@ -14,29 +14,29 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final AuthService _authService = AuthService();
+  bool _isLoading = false;
 
   void login() async {
-    showDialog(
-      context: context,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(),
-      ),
-    );
+    setState(() => _isLoading = true);
 
     try {
       await _authService.signInWithEmailPassword(
-        _emailController.text,
+        _emailController.text.trim(),
         _passwordController.text,
       );
-      if (mounted) Navigator.pop(context); // Pop loading dialog
+      if (mounted) {
+        setState(() => _isLoading = false);
+        // Navigation is handled by AuthGate
+      }
     } catch (e) {
       if (mounted) {
-        Navigator.pop(context); // Pop loading dialog
+        setState(() => _isLoading = false);
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
             title: const Text("Error"),
             content: Text(e.toString()),
+            actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("OK"))],
           ),
         );
       }
@@ -46,150 +46,239 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.background,
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 25.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+      backgroundColor: Colors.white,
+      body: SingleChildScrollView(
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height,
+          child: Stack(
             children: [
-              // Logo
-              Icon(
-                Icons.shield_outlined, // Changed to shield icon
-                size: 80,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-
-              const SizedBox(height: 25),
-
-              // Welcome message
-              const Text(
-                "Welcome back, you've been missed!",
-                style: TextStyle(
-                  fontSize: 16,
-                ),
-              ),
-
-              const SizedBox(height: 25),
-
-              // Email TextField
-              TextField(
-                controller: _emailController,
-                obscureText: false,
-                decoration: InputDecoration(
-                  hintText: "Email",
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Theme.of(context).colorScheme.tertiary),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
-                  ),
-                  fillColor: Theme.of(context).colorScheme.secondary,
-                  filled: true,
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              // Password TextField
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: InputDecoration(
-                  hintText: "Password",
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Theme.of(context).colorScheme.tertiary),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
-                  ),
-                  fillColor: Theme.of(context).colorScheme.secondary,
-                  filled: true,
-                ),
-              ),
-
-              const SizedBox(height: 25),
-
-              // Login Button
-              ElevatedButton(
-                onPressed: login,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  padding: const EdgeInsets.all(20),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: const Center(
-                  child: Text(
-                    "Login",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: Colors.white,
+              // Top decorative curve
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 300,
+                child: Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFFC2185B), Color(0xFFAD1457)], // Updated to match navbar dark pinks
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.only(
+                      bottomLeft: Radius.circular(60),
+                      bottomRight: Radius.circular(60),
                     ),
                   ),
-                ),
-              ),
-
-              const SizedBox(height: 25),
-
-              // Google Sign In Button
-              OutlinedButton.icon(
-                onPressed: () async {
-                   try {
-                     await _authService.signInWithGoogle();
-                     // AuthStateChange will handle navigation or we can just pop if needed, 
-                     // but usually AuthGate handles it.
-                   } catch (e) {
-                     if (mounted) {
-                       showDialog(
-                         context: context,
-                         builder: (context) => AlertDialog(
-                           title: const Text("Google Sign-In Error"),
-                           content: Text(e.toString()),
-                         ),
-                       );
-                     }
-                   }
-                },
-                icon: Image.network(
-                  'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/768px-Google_%22G%22_logo.svg.png',
-                   height: 24,
-                ), 
-                label: const Text("Sign in with Google"),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
-                  side: BorderSide(color: Theme.of(context).colorScheme.primary),
-                ),
-              ),
-
-              const SizedBox(height: 25),
-
-              // Register now
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                   Text(
-                    "Not a member? ",
-                    style: TextStyle(color: Theme.of(context).colorScheme.primary),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.4), // Made lighter (more white)
+                          shape: BoxShape.circle,
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.asset(
+                            'assets/logo.png',
+                            height: 80,
+                            width: 80,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        "ShieldHer",
+                        style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        "Your Safety, Our Priority",
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ],
                   ),
-                  GestureDetector(
-                    onTap: () {
-                       Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const SignupScreen()),
-                      );
-                    },
-                    child: Text(
-                      "Register now",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+
+              // Login Form
+              Positioned(
+                top: 260,
+                left: 20,
+                right: 20,
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      const Text(
+                        "Welcome Back",
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF333333),
+                        ),
+                      ),
+                      const SizedBox(height: 30),
+                      
+                      // Email
+                      TextField(
+                        controller: _emailController,
+                        style: const TextStyle(color: Colors.black87), // Fix white text issue
+                        decoration: InputDecoration(
+                          hintText: "Email Address",
+                          hintStyle: TextStyle(color: Colors.grey.shade600),
+                          prefixIcon: const Icon(Icons.email_outlined, color: Color(0xFFC2185B)),
+                          filled: true,
+                          fillColor: const Color(0xFFF5F5F5),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      // Password
+                      TextField(
+                        controller: _passwordController,
+                        obscureText: true,
+                        style: const TextStyle(color: Colors.black87), // Fix white text issue
+                        decoration: InputDecoration(
+                          hintText: "Password",
+                          hintStyle: TextStyle(color: Colors.grey.shade600),
+                          prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFFC2185B)),
+                          filled: true,
+                          fillColor: const Color(0xFFF5F5F5),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      
+                      // Login Button
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: _isLoading ? null : login,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFC2185B),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 2,
+                          ),
+                          child: _isLoading
+                              ? const SizedBox(
+                                  height: 24,
+                                  width: 24,
+                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                )
+                              : const Text(
+                                  "Login",
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 20),
+                      
+                      // Google Sign In
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                             try {
+                               await _authService.signInWithGoogle();
+                             } catch (e) {
+                               if (mounted) {
+                                 ScaffoldMessenger.of(context).showSnackBar(
+                                   SnackBar(content: Text("Google Sign-In Error: $e")),
+                                 );
+                               }
+                             }
+                          },
+                          icon: Image.network(
+                            'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/768px-Google_%22G%22_logo.svg.png',
+                             height: 20,
+                          ),
+                          label: const Text(
+                            "Sign in with Google",
+                            style: TextStyle(color: Colors.black87),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+                            side: const BorderSide(color: Color(0xFFEEEEEE)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              
+              // Register Link
+              Positioned(
+                bottom: 30,
+                left: 0,
+                right: 0,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text(
+                      "Don't have an account? ",
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                    GestureDetector(
+                      onTap: () {
+                         Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const SignupScreen()),
+                        );
+                      },
+                      child: const Text(
+                        "Register Now",
+                        style: TextStyle(
+                          color: Color(0xFFC2185B),
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),

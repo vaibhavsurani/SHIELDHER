@@ -3,7 +3,9 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService {
   final SupabaseClient _supabase = Supabase.instance.client;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+  serverClientId: '635785585974-6g8g6gtnjfkale52ncjea8elfuiqsjbn.apps.googleusercontent.com',
+);
 
   // Get current user
   User? get currentUser => _supabase.auth.currentUser;

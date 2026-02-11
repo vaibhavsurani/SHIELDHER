@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shieldher/auth_gate.dart';
-import 'package:shieldher/screens/video_splash_screen.dart';
+
+
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -9,6 +12,9 @@ void main() async {
     url: 'https://ddyqzkpkkdntkbnmiltq.supabase.co',
     anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRkeXF6a3Bra2RudGtibm1pbHRxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzMzk1NjksImV4cCI6MjA4NTkxNTU2OX0.OqCZOFUHobY9dvDoNATetQBd-ojyqrVffvho6jnPayo',
   );
+  
+
+
   runApp(const ShieldHerApp());
 }
 
@@ -20,19 +26,22 @@ class ShieldHerApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'ShieldHer',
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF121212),
+      theme: ThemeData.light().copyWith(
+        scaffoldBackgroundColor: Colors.grey.shade50,
         primaryColor: const Color(0xFFC2185B),
-        colorScheme: const ColorScheme.dark(
+        colorScheme: const ColorScheme.light(
           primary: Color(0xFFC2185B),
           secondary: Color(0xFFAB47BC),
+          background: Colors.white,
+        ),
+        appBarTheme: const AppBarTheme(
+          systemOverlayStyle: SystemUiOverlayStyle.dark, // Dark icons for light background
+          backgroundColor: Colors.transparent,
+          elevation: 0,
         ),
         useMaterial3: true,
       ),
-      home: const VideoSplashScreen(
-        nextScreen: AuthGate(),
-        videoAsset: 'assets/splash_video.mp4',
-      ),
+      home: const AuthGate(),
     );
   }
 }

@@ -13,7 +13,7 @@ class AudioRecorderService {
   bool _isRecording = false;
   Timer? _timer;
   int _recordingDuration = 0;
-  static const int maxDuration = 30;
+
 
   bool get isRecording => _isRecording;
   int get recordingDuration => _recordingDuration;
@@ -55,12 +55,10 @@ class AudioRecorderService {
     }
 
     // Start timer
+    // Start timer for duration tracking only
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       _recordingDuration++;
       _durationController.add(_recordingDuration);
-      if (_recordingDuration >= maxDuration) {
-        stopRecording();
-      }
     });
   }
 

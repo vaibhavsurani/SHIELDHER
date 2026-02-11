@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -8,15 +9,20 @@ import 'package:geolocator/geolocator.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shieldher/widgets/app_header.dart';
+import 'package:intl/intl.dart';
 
 class CommunityScreen extends StatefulWidget {
   final GlobalKey<ScaffoldState>? scaffoldKey;
   final Function(int)? onNavigate;
+  final VoidCallback? onNotificationTap;
+  final int notificationCount;
 
   const CommunityScreen({
     super.key,
     this.scaffoldKey,
     this.onNavigate,
+    this.onNotificationTap,
+    this.notificationCount = 0,
   });
 
   @override
@@ -32,9 +38,12 @@ class _CommunityScreenState extends State<CommunityScreen> {
   Bubble? _selectedBubble;
   List<LiveLocation> _liveLocations = [];
   List<BubbleMember> _bubbleMembers = [];
+  List<BubbleInvite> _pendingInvites = [];
   bool _isLoading = true;
   bool _isLive = false;
   LatLng _currentLocation = const LatLng(22.5988, 72.8245);
+  StreamSubscription<Position>? _positionSubscription;
+  Timer? _refreshTimer;
 
   int _filterMode = 0; // 0 = All, 1 = Family Only, 2 = Helpers Only
 
@@ -42,7 +51,16 @@ class _CommunityScreenState extends State<CommunityScreen> {
   void initState() {
     super.initState();
     _loadData();
-    _getCurrentLocation();
+    _startLocationUpdates();
+    _loadPendingInvites();
+    // Save user's last location so bubble members can see them even when offline
+    _locationService.saveLastLocation();
+    // Periodically refresh member locations every 15 seconds
+    _refreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted && _selectedBubble != null) {
+        _loadBubbleData();
+      }
+    });
   }
 
   Future<void> _loadData() async {
@@ -78,13 +96,18 @@ class _CommunityScreenState extends State<CommunityScreen> {
 
     // Load members
     final members = await _communityService.getBubbleMembers(_selectedBubble!.id);
-    setState(() => _bubbleMembers = members);
+    if (mounted) setState(() => _bubbleMembers = members);
+    print('[Community] Loaded ${members.length} members for bubble ${_selectedBubble!.name}');
 
     // Load locations
     List<LiveLocation> locations = [];
 
     if (_filterMode == 0 || _filterMode == 1) {
       final bubbleLocations = await _locationService.getBubbleMembersLocations(_selectedBubble!.id);
+      print('[Community] Fetched ${bubbleLocations.length} member locations');
+      for (var loc in bubbleLocations) {
+        print('[Community]   -> ${loc.displayName}: lat=${loc.latitude}, lng=${loc.longitude}, isLive=${loc.isLive}');
+      }
       locations.addAll(bubbleLocations);
     }
 
@@ -97,7 +120,10 @@ class _CommunityScreenState extends State<CommunityScreen> {
       }
     }
 
-    setState(() => _liveLocations = locations);
+    if (mounted) {
+      setState(() => _liveLocations = locations);
+      print('[Community] Total locations on map: ${_liveLocations.length}');
+    }
   }
 
   Future<void> _toggleLive() async {
@@ -113,6 +139,173 @@ class _CommunityScreenState extends State<CommunityScreen> {
         backgroundColor: _isLive ? Colors.green : Colors.grey,
       ),
     );
+    // Reload member data to reflect the change
+    _loadBubbleData();
+  }
+
+  Future<void> _loadPendingInvites() async {
+    print('Loading pending invites...');
+    final invites = await _communityService.getPendingInvites();
+    print('Loaded ${invites.length} pending invites');
+    setState(() => _pendingInvites = invites);
+  }
+
+  void _showPendingInvitesDialog() async {
+    // Refresh invites before showing
+    await _loadPendingInvites();
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => Container(
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.6),
+        padding: const EdgeInsets.all(20),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Pending Invites',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (_pendingInvites.isEmpty)
+              Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.mail_outline, size: 48, color: Colors.grey.shade400),
+                    const SizedBox(height: 12),
+                    Text('No pending invites', style: TextStyle(color: Colors.grey.shade600)),
+                  ],
+                ),
+              )
+            else
+              Expanded(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _pendingInvites.length,
+                  itemBuilder: (context, index) {
+                    final invite = _pendingInvites[index];
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.grey.shade200),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(colors: [Color(0xFFC2185B), Color(0xFFAB47BC)]),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(Icons.group, color: Colors.white, size: 20),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      invite.bubbleName,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87),
+                                    ),
+                                    Text(
+                                      'Invited by ${invite.inviterName}',
+                                      style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: () async {
+                                    await _communityService.declineInvite(invite.id);
+                                    Navigator.pop(context);
+                                    _loadPendingInvites();
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Invite declined')),
+                                    );
+                                  },
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.grey.shade700,
+                                    side: BorderSide(color: Colors.grey.shade300),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                  child: const Text('Decline'),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton(
+                                    onPressed: () async {
+                                      final success = await _communityService.acceptInvite(invite.id);
+                                      Navigator.pop(context);
+                                      if (success) {
+                                        _loadPendingInvites();
+                                        _loadData();
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Joined bubble!'), backgroundColor: Colors.green),
+                                        );
+                                      } else {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Failed to join bubble. Note: You might already be a member.'), backgroundColor: Colors.red),
+                                        );
+                                      }
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFFC2185B),
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                  child: const Text('Accept'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _selectBubble(Bubble bubble) {
@@ -122,9 +315,31 @@ class _CommunityScreenState extends State<CommunityScreen> {
 
   @override
   void dispose() {
+    _refreshTimer?.cancel();
     _locationService.dispose();
+    _positionSubscription?.cancel();
     super.dispose();
   }
+
+  Future<void> _startLocationUpdates() async {
+    // Initial check
+    await _getCurrentLocation();
+    
+    // Start stream
+    _positionSubscription = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 10,
+      ),
+    ).listen((Position position) {
+      if (mounted) {
+        setState(() {
+          _currentLocation = LatLng(position.latitude, position.longitude);
+        });
+      }
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -138,6 +353,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
               showLiveStatus: true,
               isLive: _isLive,
               onLiveToggle: _toggleLive,
+              onNotificationTap: widget.onNotificationTap,
+              notificationCount: widget.notificationCount,
             ),
             _buildCategoryRow(),
             Expanded(
@@ -151,6 +368,32 @@ class _CommunityScreenState extends State<CommunityScreen> {
                       right: 16,
                       child: _buildMembersRow(),
                     ),
+                  Positioned(
+                    top: 12,
+                    right: 16,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        FloatingActionButton.small(
+                          heroTag: 'north_btn',
+                          backgroundColor: Colors.white,
+                          child: const Icon(Icons.navigation, color: Colors.blue),
+                          onPressed: () {
+                             _mapController.rotate(0);
+                          },
+                        ),
+                        const SizedBox(height: 8),
+                        FloatingActionButton.small(
+                          heroTag: 'my_location_btn',
+                          backgroundColor: Colors.white,
+                          child: const Icon(Icons.my_location, color: Colors.blue),
+                          onPressed: () {
+                            _mapController.move(_currentLocation, 15);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -237,19 +480,44 @@ class _CommunityScreenState extends State<CommunityScreen> {
                 ),
               ),
               const SizedBox(width: 4),
-              // Notification bell
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  shape: BoxShape.circle,
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.notifications_none_rounded, size: 22),
-                  color: Colors.black87,
-                  onPressed: () {},
-                ),
+              // Notification bell with invite count
+              Stack(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.mail_outline_rounded, size: 22),
+                      color: Colors.black87,
+                      onPressed: () {
+                        print('Mail button tapped!');
+                        _showPendingInvitesDialog();
+                      },
+                    ),
+                  ),
+                  if (_pendingInvites.isNotEmpty)
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFC2185B),
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                        child: Text(
+                          '${_pendingInvites.length}',
+                          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(width: 4),
               // Menu
@@ -448,75 +716,79 @@ class _CommunityScreenState extends State<CommunityScreen> {
         // Member avatars stack
         SizedBox(
           height: 40,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              for (int i = 0; i < (_bubbleMembers.length > 5 ? 5 : _bubbleMembers.length); i++)
-                Positioned(
-                  left: i * 28.0,
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          [const Color(0xFFFF6B6B), const Color(0xFFFF8E8E)],
-                          [const Color(0xFF4ECDC4), const Color(0xFF6BE5DC)],
-                          [const Color(0xFF845EC2), const Color(0xFFA178DF)],
-                          [const Color(0xFFFF9671), const Color(0xFFFFB899)],
-                          [const Color(0xFF00C9A7), const Color(0xFF4DE0C7)],
-                        ][i % 5],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 3),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
+          child: ExcludeSemantics(
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                for (int i = 0; i < (_bubbleMembers.length > 5 ? 5 : _bubbleMembers.length); i++)
+                  Positioned(
+                    key: ValueKey('member_${_bubbleMembers[i].id}'),
+                    left: i * 28.0,
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            [const Color(0xFFFF6B6B), const Color(0xFFFF8E8E)],
+                            [const Color(0xFF4ECDC4), const Color(0xFF6BE5DC)],
+                            [const Color(0xFF845EC2), const Color(0xFFA178DF)],
+                            [const Color(0xFFFF9671), const Color(0xFFFFB899)],
+                            [const Color(0xFF00C9A7), const Color(0xFF4DE0C7)],
+                          ][i % 5],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                         ),
-                      ],
-                    ),
-                    child: Center(
-                      child: Text(
-                        _bubbleMembers[i].displayName?.isNotEmpty == true
-                            ? _bubbleMembers[i].displayName![0].toUpperCase()
-                            : '?',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                        ),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 3),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
-                    ),
-                  ),
-                ),
-              if (_bubbleMembers.length > 5)
-                Positioned(
-                  left: 5 * 28.0,
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade800,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 3),
-                    ),
-                    child: Center(
-                      child: Text(
-                        '+${_bubbleMembers.length - 5}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                      child: Center(
+                        child: Text(
+                          _bubbleMembers[i].displayName?.isNotEmpty == true
+                              ? _bubbleMembers[i].displayName![0].toUpperCase()
+                              : '?',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-            ],
+                if (_bubbleMembers.length > 5)
+                  Positioned(
+                    key: const ValueKey('overflow_count'),
+                    left: 5 * 28.0,
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade800,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 3),
+                      ),
+                      child: Center(
+                        child: Text(
+                          '+${_bubbleMembers.length - 5}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ],
@@ -580,6 +852,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
                 point: _currentLocation,
                 width: 80,
                 height: 80,
+                rotate: true,
+                alignment: Alignment.center,
                 child: Column(
                   children: [
                     Container(
@@ -607,38 +881,86 @@ class _CommunityScreenState extends State<CommunityScreen> {
                 ),
               ),
               // Other members
-              ..._liveLocations.map((loc) => Marker(
+              ..._liveLocations.map((loc) {
+                final isLive = loc.isLive;
+                // If offline, max 30 mins ago to be "relevant" enough? 
+                // For now just show all but visually distinct
+                final color = isLive 
+                    ? (loc.isHelper ? Colors.blue : Colors.orange) 
+                    : Colors.grey;
+
+                return Marker(
                     point: LatLng(loc.latitude, loc.longitude),
-                    width: 80,
-                    height: 70,
-                    child: Column(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(8),
-                            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4)],
+                    width: 90,
+                    height: 90, // Increased height for label
+                    rotate: true,
+                    alignment: Alignment.center,
+                    child: GestureDetector(
+                      onTap: () {
+                         final timeStr = DateFormat('h:mm a').format(loc.updatedAt.toLocal());
+                         final dateStr = DateFormat('MMM d').format(loc.updatedAt.toLocal());
+                         ScaffoldMessenger.of(context).showSnackBar(
+                           SnackBar(
+                             content: Text(isLive 
+                                ? '${loc.displayName} is LIVE now' 
+                                : 'Last seen: $timeStr, $dateStr'),
+                             behavior: SnackBarBehavior.floating,
+                           ),
+                         );
+                      },
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(8),
+                              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4)],
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  loc.displayName ?? 'User',
+                                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                if (isLive)
+                                  Container(
+                                    margin: const EdgeInsets.only(top: 2),
+                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Text('LIVE', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
+                                  ),
+                              ],
+                            ),
                           ),
-                          child: Text(
-                            loc.displayName ?? 'User',
-                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                          const SizedBox(height: 2),
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isLive ? Colors.white : Colors.white.withOpacity(0.5), 
+                                width: isLive ? 2 : 1
+                              ),
+                              boxShadow: isLive ? [
+                                BoxShadow(color: color.withOpacity(0.4), blurRadius: 8, spreadRadius: 2)
+                              ] : null,
+                            ),
+                            child: Icon(Icons.person, color: Colors.white, size: 20),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: loc.isHelper ? Colors.blue : Colors.orange,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2),
-                          ),
-                          child: const Icon(Icons.person, color: Colors.white, size: 20),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  )),
+                  );
+              }),
             ],
           ),
         ],
@@ -712,8 +1034,9 @@ class _CommunityScreenState extends State<CommunityScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('Create Bubble'),
+          title: const Text('Create Bubble', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -725,7 +1048,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              const Text('Choose Icon:', style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text('Choose Icon:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -748,7 +1071,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel', style: TextStyle(color: Colors.grey.shade600))),
             ElevatedButton(
               onPressed: () async {
                 if (nameController.text.trim().isEmpty) {
@@ -794,19 +1117,19 @@ class _CommunityScreenState extends State<CommunityScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(bubble.name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            Text(bubble.name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)),
             const SizedBox(height: 20),
             ListTile(
               leading: const Icon(Icons.person_add, color: Color(0xFFC2185B)),
-              title: const Text('Invite Members'),
+              title: const Text('Invite Members', style: TextStyle(color: Colors.black87)),
               onTap: () {
                 Navigator.pop(context);
                 _showInviteDialog();
               },
             ),
             ListTile(
-              leading: const Icon(Icons.share, color: Colors.blue),
-              title: const Text('Share Invite Link'),
+              leading: const Icon(Icons.share, color: Color(0xFFC2185B)),
+              title: const Text('Share Invite Link', style: TextStyle(color: Colors.black87)),
               onTap: () async {
                 Navigator.pop(context);
                 final link = _communityService.getInviteLink(bubble.inviteCode);
@@ -882,7 +1205,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                 children: [
                   const Text(
                     'Add Members',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87),
                   ),
                   IconButton(
                     icon: const Icon(Icons.close),
@@ -898,7 +1221,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
               if (_selectedBubble != null) ...[
                 const Text(
                   'Share Invite Link',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black87),
                 ),
                 const SizedBox(height: 12),
                 
@@ -950,7 +1273,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                       child: _buildShareButton(
                         icon: Icons.share,
                         label: 'More Apps',
-                        color: const Color(0xFF2196F3),
+                        color: const Color(0xFFC2185B),
                         onTap: () => _shareViaOtherApps(),
                       ),
                     ),
@@ -976,7 +1299,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
               // =================================
               const Text(
                 'Invite by Username',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black87),
               ),
               const SizedBox(height: 8),
               const Text(
@@ -1074,7 +1397,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
               children: [
                 const Text(
                   'Join a Bubble',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close),
@@ -1093,11 +1416,11 @@ class _CommunityScreenState extends State<CommunityScreen> {
               textCapitalization: TextCapitalization.characters,
               decoration: InputDecoration(
                 hintText: 'Enter invite code',
-                prefixIcon: const Icon(Icons.vpn_key, color: Color(0xFF4CAF50)),
+                prefixIcon: const Icon(Icons.vpn_key, color: Color(0xFFC2185B)),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF4CAF50), width: 2),
+                  borderSide: const BorderSide(color: Color(0xFFC2185B), width: 2),
                 ),
               ),
             ),
@@ -1132,7 +1455,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                   }
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4CAF50),
+                  backgroundColor: const Color(0xFFC2185B),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),

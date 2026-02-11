@@ -8,6 +8,7 @@ class AppHeader extends StatelessWidget {
   final bool isLive;
   final VoidCallback? onLiveToggle;
   final VoidCallback? onNotificationTap;
+  final int notificationCount;
 
   const AppHeader({
     super.key,
@@ -16,6 +17,7 @@ class AppHeader extends StatelessWidget {
     this.isLive = false,
     this.onLiveToggle,
     this.onNotificationTap,
+    this.notificationCount = 0,
   });
 
   @override
@@ -107,19 +109,41 @@ class AppHeader extends StatelessWidget {
                   ),
                 ),
               if (showLiveStatus) const SizedBox(width: 4),
-              // Notification bell
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  shape: BoxShape.circle,
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.notifications_none_rounded, size: 22),
-                  color: Colors.black87,
-                  onPressed: onNotificationTap ?? () {},
-                ),
+              // Notification bell with badge
+              Stack(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.notifications_none_rounded, size: 22),
+                      color: Colors.black87,
+                      onPressed: onNotificationTap ?? () {},
+                    ),
+                  ),
+                  if (notificationCount > 0)
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFC2185B),
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                        child: Text(
+                          '$notificationCount',
+                          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(width: 4),
               // Menu
