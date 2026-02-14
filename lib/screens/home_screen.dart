@@ -447,9 +447,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFC2185B).withOpacity(0.05),
+        color: _liveLocationService.isLive ? Colors.green.withOpacity(0.1) : const Color(0xFFC2185B).withOpacity(0.05),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFC2185B).withOpacity(0.2)),
+        border: Border.all(color: _liveLocationService.isLive ? Colors.green : const Color(0xFFC2185B).withOpacity(0.2)),
       ),
       child: Row(
         children: [
@@ -459,30 +459,55 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
               color: Colors.white,
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.my_location, color: Color(0xFFC2185B)),
+            child: Icon(Icons.my_location, color: _liveLocationService.isLive ? Colors.green : const Color(0xFFC2185B)),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  "You are safe", // Dynamic based on status
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87),
+                Text(
+                  _liveLocationService.isLive ? "You are live" : "You are safe",
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87),
                 ),
                 Text(
-                  "Location sharing is off",
+                  _liveLocationService.isLive ? "Sharing location with community" : "Location sharing is off",
                   style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
           Switch(
-            value: false, // Todo: Connect to real state
-            onChanged: (val) {
-              // Toggle logic
+            value: _liveLocationService.isLive,
+            onChanged: (val) async {
+              if (val) {
+                await _liveLocationService.goLive();
+                if (mounted) {
+                   ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("You are now live"), backgroundColor: Colors.green),
+                  );
+                }
+              } else {
+                await _liveLocationService.goOffline();
+                 if (mounted) {
+                   ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("You are now offline"), backgroundColor: Colors.grey),
+                  );
+                }
+              }
+              setState(() {}); // Trigger rebuild to update UI
             },
-            activeColor: const Color(0xFFC2185B),
+            activeColor: Colors.green,
+            inactiveThumbColor: const Color(0xFFC2185B),
+            inactiveTrackColor: const Color(0xFFC2185B).withOpacity(0.2),
+            trackOutlineColor: MaterialStateProperty.resolveWith((states) {
+              if (states.contains(MaterialState.selected)) {
+                return Colors.transparent;
+              }
+              return const Color(0xFFC2185B);
+            }),
           ),
         ],
       ),

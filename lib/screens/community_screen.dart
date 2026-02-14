@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -30,7 +31,7 @@ class CommunityScreen extends StatefulWidget {
   State<CommunityScreen> createState() => _CommunityScreenState();
 }
 
-class _CommunityScreenState extends State<CommunityScreen> {
+class _CommunityScreenState extends State<CommunityScreen> with TickerProviderStateMixin {
   final CommunityService _communityService = CommunityService();
   final LiveLocationService _locationService = LiveLocationService();
   final MapController _mapController = MapController();
@@ -41,7 +42,9 @@ class _CommunityScreenState extends State<CommunityScreen> {
   List<BubbleMember> _bubbleMembers = [];
   List<BubbleInvite> _pendingInvites = [];
   bool _isLoading = true;
-  bool _isLive = false;
+  // Use getter for single source of truth
+  bool get _isLive => _locationService.isLive;
+  
   LatLng _currentLocation = const LatLng(22.5988, 72.8245);
   StreamSubscription<Position>? _positionSubscription;
   Timer? _refreshTimer;
@@ -51,6 +54,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
   @override
   void initState() {
     super.initState();
+    // No need to sync local variable as we use getter now
+    
     _loadData();
     _startLocationUpdates();
     _loadPendingInvites();
@@ -62,6 +67,25 @@ class _CommunityScreenState extends State<CommunityScreen> {
         _loadBubbleData();
       }
     });
+  }
+
+  // ... (Keep existing methods)
+
+  Future<void> _toggleLive() async {
+    if (_isLive) {
+      await _locationService.goOffline();
+    } else {
+      await _locationService.goLive();
+    }
+    setState(() {}); // Just rebuild to reflect new service state
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(_isLive ? 'You are now live!' : 'You are now offline'),
+        backgroundColor: _isLive ? Colors.green : Colors.grey,
+      ),
+    );
+    // Reload member data to reflect the change
+    _loadBubbleData();
   }
 
   Future<void> _loadData() async {
@@ -127,22 +151,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
     }
   }
 
-  Future<void> _toggleLive() async {
-    if (_isLive) {
-      await _locationService.goOffline();
-    } else {
-      await _locationService.goLive();
-    }
-    setState(() => _isLive = !_isLive);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(_isLive ? 'You are now live!' : 'You are now offline'),
-        backgroundColor: _isLive ? Colors.green : Colors.grey,
-      ),
-    );
-    // Reload member data to reflect the change
-    _loadBubbleData();
-  }
+
 
   Future<void> _loadPendingInvites() async {
     debugPrint('Loading pending invites...');
@@ -380,7 +389,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
                           backgroundColor: Colors.white,
                           child: const Icon(Icons.navigation, color: Colors.blue),
                           onPressed: () {
-                             _mapController.rotate(0);
+                             // Smooth rotation to North (0)
+                             _animatedMapMove(_mapController.camera.center, _mapController.camera.zoom, destRotation: 0);
                           },
                         ),
                         const SizedBox(height: 8),
@@ -389,7 +399,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
                           backgroundColor: Colors.white,
                           child: const Icon(Icons.my_location, color: Colors.blue),
                           onPressed: () {
-                            _mapController.move(_currentLocation, 15);
+                            // "Fly-to" animation: move and zoom simultaneously
+                            _flyToPosition(_currentLocation);
                           },
                         ),
                       ],
@@ -402,6 +413,115 @@ class _CommunityScreenState extends State<CommunityScreen> {
         ),
       ),
     );
+  }
+
+  /// Animates the map movement to a destination
+  void _animatedMapMove(LatLng destLocation, double destZoom, {double? destRotation}) {
+    // Create some variables that hold the current state of the map
+    final latTween = Tween<double>(
+      begin: _mapController.camera.center.latitude,
+      end: destLocation.latitude,
+    );
+    final lngTween = Tween<double>(
+      begin: _mapController.camera.center.longitude,
+      end: destLocation.longitude,
+    );
+    final zoomTween = Tween<double>(
+      begin: _mapController.camera.zoom,
+      end: destZoom,
+    );
+    final rotateTween = Tween<double>(
+      begin: _mapController.camera.rotation,
+      end: destRotation ?? _mapController.camera.rotation,
+    );
+
+    // Create a controller to handle the animation
+    final controller = AnimationController(
+      duration: const Duration(milliseconds: 500),
+      vsync: this,
+    );
+
+    // Create the animation using a curved animation
+    final animation = CurvedAnimation(
+      parent: controller,
+      curve: Curves.fastOutSlowIn,
+    );
+
+    controller.addListener(() {
+      _mapController.moveAndRotate(
+        LatLng(latTween.evaluate(animation), lngTween.evaluate(animation)),
+        zoomTween.evaluate(animation),
+        rotateTween.evaluate(animation),
+      );
+    });
+
+    animation.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        controller.dispose();
+      } else if (status == AnimationStatus.dismissed) {
+        controller.dispose();
+      }
+    });
+
+    controller.forward();
+  }
+
+  void _flyToPosition(LatLng destLocation) {
+    final startLat = _mapController.camera.center.latitude;
+    final startLng = _mapController.camera.center.longitude;
+    final startZoom = _mapController.camera.zoom;
+    final destZoom = 16.0;
+
+    final controller = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+
+    // We'll manually handle the curves for different properties
+    // Movement: Slow-Fast-Slow (Curves.easeInOutCubic)
+    // Zoom Arc: Fast-Slow-Fast (Linear t -> Sin(t*pi))
+
+    final latTween = Tween<double>(begin: startLat, end: destLocation.latitude);
+    final lngTween = Tween<double>(begin: startLng, end: destLocation.longitude);
+    // Removed rotateTween to keep current direction
+
+    // Calculate the total zoom drop based on distance or constant
+    // A drop of 2.0 to 3.0 gives a nice "fly" effect
+    final double zoomDrop = 2.5;
+
+    controller.addListener(() {
+      // Get linear time (0.0 to 1.0)
+      final t = controller.value;
+      
+      // Calculate eased movement time (Slow-Fast-Slow)
+      final moveT = Curves.easeInOutCubic.transform(t);
+
+      // Linear interpolation of the base zoom level (from start to end)
+      // Use moveT so base zoom matches the ground movement speed
+      final baseZoom = startZoom + (destZoom - startZoom) * moveT;
+
+      // Calculate parabolic zoom offset using sine wave
+      // sin(t * pi) driven by linear t starts with STEEP slope (Fast)
+      // This gives "Zoom out fast-slow" (taking off) and "Zoom in slow-fast" (landing)
+      final zoomOffset = zoomDrop * sin(t * pi);
+
+      // Final zoom is base zoom minus the offset (zooming out)
+      final currentZoom = baseZoom - zoomOffset;
+
+      _mapController.moveAndRotate(
+        LatLng(latTween.transform(moveT), lngTween.transform(moveT)),
+        currentZoom,
+        _mapController.camera.rotation, // Keep current rotation
+      );
+    });
+
+    controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed || status == AnimationStatus.dismissed) {
+        controller.dispose();
+      }
+    });
+
+    controller.forward();
   }
 
   Widget _buildHeader() {
@@ -1226,33 +1346,58 @@ class _CommunityScreenState extends State<CommunityScreen> {
                 ),
                 const SizedBox(height: 12),
                 
-                // Invite Code Display
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [const Color(0xFFC2185B).withOpacity(0.1), const Color(0xFFC2185B).withOpacity(0.05)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFC2185B).withOpacity(0.3)),
-                  ),
-                  child: Column(
-                    children: [
-                      const Text('Invite Code', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                      const SizedBox(height: 4),
-                      Text(
-                        _selectedBubble!.inviteCode,
-                        style: const TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 4,
-                          color: Color(0xFFC2185B),
+                // Invite Code Display (with copy button on side)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [const Color(0xFFC2185B).withOpacity(0.1), const Color(0xFFC2185B).withOpacity(0.05)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFC2185B).withOpacity(0.3)),
+                        ),
+                        child: Column(
+                          children: [
+                            const Text('Invite Code', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                            const SizedBox(height: 4),
+                            Text(
+                              _selectedBubble!.inviteCode,
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 4,
+                                color: Color(0xFFC2185B),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 12),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.content_copy, color: Color(0xFFC2185B)),
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: _selectedBubble!.inviteCode));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Code copied!'), backgroundColor: Colors.green, duration: Duration(seconds: 1)),
+                          );
+                        },
+                        tooltip: "Copy Code",
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 16),
 

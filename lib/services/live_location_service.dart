@@ -46,6 +46,15 @@ class LiveLocation {
 }
 
 class LiveLocationService {
+  // Singleton instance
+  static final LiveLocationService _instance = LiveLocationService._internal();
+
+  factory LiveLocationService() {
+    return _instance;
+  }
+
+  LiveLocationService._internal();
+
   final SupabaseClient _supabase = Supabase.instance.client;
   StreamSubscription<Position>? _positionSubscription;
   bool _isLive = false;
