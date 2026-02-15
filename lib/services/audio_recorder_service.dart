@@ -71,7 +71,7 @@ class AudioRecorderService {
     return path;
   }
 
-  Future<String?> uploadToSupabase(String? filePath) async {
+  Future<String?> uploadToSupabase(String? filePath, {DateTime? startTime}) async {
     if (filePath == null || filePath.isEmpty) return null;
 
     final user = _supabase.auth.currentUser;
@@ -79,7 +79,8 @@ class AudioRecorderService {
       throw Exception('User not authenticated');
     }
 
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    // Use provided start time or current time
+    final timestamp = (startTime ?? DateTime.now()).millisecondsSinceEpoch;
     final fileName = '${user.id}/$timestamp.m4a';
     final bucket = 'audio_recordings';
 
@@ -107,10 +108,16 @@ class AudioRecorderService {
       // Fetch location
       final Position? position = await EmergencyService().getCurrentLocation();
       
+      // Convert to IST (UTC + 5:30)
+      final dateUtc = DateTime.fromMillisecondsSinceEpoch(timestamp, isUtc: true);
+      final dateIst = dateUtc.add(const Duration(hours: 5, minutes: 30));
+      final formattedDate = "${dateIst.year}-${dateIst.month.toString().padLeft(2, '0')}-${dateIst.day.toString().padLeft(2, '0')}";
+      final formattedTime = "${dateIst.hour.toString().padLeft(2, '0')}:${dateIst.minute.toString().padLeft(2, '0')}:${dateIst.second.toString().padLeft(2, '0')}";
+      
       await _saveToSupabase(
         user.id, 
         downloadUrl, 
-        fileName: 'Audio ${DateTime.fromMillisecondsSinceEpoch(timestamp)}',
+        fileName: 'Audio $formattedDate $formattedTime',
         latitude: position?.latitude,
         longitude: position?.longitude,
       );

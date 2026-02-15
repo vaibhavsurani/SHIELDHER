@@ -5,73 +5,70 @@ import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 
 class VolumeAccessibilityService : AccessibilityService() {
 
-    private var isVolumeUpPressed = false
-    private var isPowerPressed = false
-    private val simultaneousWindow = 150L // 150ms window for simultaneous press
-    private var lastPowerPressTime = 0L
-    private var lastVolumeUpPressTime = 0L
-
-    override fun onKeyEvent(event: KeyEvent): Boolean {
-        val action = event.action
-        val keyCode = event.keyCode
-        val now = System.currentTimeMillis()
-
-        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
-            if (action == KeyEvent.ACTION_DOWN) {
-                isVolumeUpPressed = true
-                lastVolumeUpPressTime = now
-                checkAndTrigger()
-            } else if (action == KeyEvent.ACTION_UP) {
-                isVolumeUpPressed = false
-            }
-        }
-
-        if (keyCode == KeyEvent.KEYCODE_POWER) {
-             if (action == KeyEvent.ACTION_DOWN) {
-                isPowerPressed = true
-                lastPowerPressTime = now
-                checkAndTrigger()
-            } else if (action == KeyEvent.ACTION_UP) {
-                isPowerPressed = false
-            }
-        }
-        
-        // We rarely want to block these keys unless we are sure we're triggering
-        // return true usually blocks the event from propagating. 
-        // For Power + Volume Up, we probably want to let system handle them if not triggering,
-        // but if triggering, we might want to block. However, Power key is hard to block.
-        return false 
+    companion object {
+        private const val TAG = "VolumeAccessibility"
+        private const val PRESS_GAP_MS = 500L           // Max gap between consecutive presses
+        private const val MIN_PRESS_GAP_MS = 100L       // Min gap to filter key repeats
+        private const val REQUIRED_PRESSES = 3           // Min presses to trigger
+        private const val COOLDOWN_MS = 3000L            // Cooldown after trigger
     }
 
-    private fun checkAndTrigger() {
-        val timeDiff = Math.abs(lastPowerPressTime - lastVolumeUpPressTime)
-        
-        // Conditions: Both currently pressed OR pressed within very short window of each other
-        if ((isVolumeUpPressed && isPowerPressed) || (isVolumeUpPressed && (System.currentTimeMillis() - lastPowerPressTime < simultaneousWindow)) || (isPowerPressed && (System.currentTimeMillis() - lastVolumeUpPressTime < simultaneousWindow)) || (timeDiff < simultaneousWindow)) {
-             // Debounce slightly to ensure we don't trigger multiple times for one press combo
-             val now = System.currentTimeMillis()
-             if (now - lastTriggerTime > 2000) { // 2 second cool-down
-                 lastTriggerTime = now
-                 triggerFakeCall()
-             }
-        }
-    }
-
+    private var volumeDownPressCount = 0
+    private var lastVolumeDownPressTime = 0L
     private var lastTriggerTime = 0L
 
-    private fun triggerFakeCall() {
+    override fun onKeyEvent(event: KeyEvent): Boolean {
+        // SOS Trigger: 3x Volume Down (only fresh presses, not repeats)
+        if (event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN && event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            val now = System.currentTimeMillis()
+
+            // Cooldown check
+            if (now - lastTriggerTime < COOLDOWN_MS) {
+                return false
+            }
+
+            // Ignore key repeats (too fast = holding button)
+            if (volumeDownPressCount > 0 && (now - lastVolumeDownPressTime) < MIN_PRESS_GAP_MS) {
+                return false
+            }
+
+            // If too much time has passed since the last press, reset
+            if (volumeDownPressCount > 0 && (now - lastVolumeDownPressTime) > PRESS_GAP_MS) {
+                volumeDownPressCount = 0
+            }
+
+            volumeDownPressCount++
+            lastVolumeDownPressTime = now
+
+            Log.d(TAG, "Volume Down press #$volumeDownPressCount")
+
+            if (volumeDownPressCount >= REQUIRED_PRESSES) {
+                lastTriggerTime = now
+                volumeDownPressCount = 0
+                triggerSOSOverlay()
+                return true // Consume the event
+            }
+        }
+
+        return false // Don't consume the event
+    }
+
+    private fun triggerSOSOverlay() {
+        Log.d(TAG, "Triggering SOS Overlay (Level 1)")
         Handler(Looper.getMainLooper()).post {
-            val intent = Intent(this, FakeCallActivity::class.java)
+            val intent = Intent(this, PowerButtonSOSActivity::class.java)
             intent.addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or
                         Intent.FLAG_ACTIVITY_CLEAR_TOP or
                         Intent.FLAG_ACTIVITY_SINGLE_TOP
             )
+            intent.putExtra("initial_level", 1)
             startActivity(intent)
         }
     }
@@ -88,5 +85,6 @@ class VolumeAccessibilityService : AccessibilityService() {
             AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS or
                     AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
         serviceInfo = info
+        Log.d(TAG, "Accessibility Service connected")
     }
 }

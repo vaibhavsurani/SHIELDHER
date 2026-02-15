@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shieldher/auth_gate.dart';
+import 'package:shieldher/services/power_button_sos_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -28,6 +29,9 @@ class _SplashScreenState extends State<SplashScreen> {
       // already initialized or error
       debugPrint("Supabase init error (or already initialized): $e");
     }
+
+    // 2. Initialize Power Button SOS Service (after Supabase is ready)
+    PowerButtonSOSService().initialize();
 
     // 2. Minimum splash duration for branding (optional, keeps logo visible for at least 1.5s)
     await Future.delayed(const Duration(milliseconds: 800));
