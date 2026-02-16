@@ -11,9 +11,10 @@ import 'package:shieldher/screens/emergency_contacts_screen.dart';
 import 'package:shieldher/screens/learn_screen.dart'; // Import LearnScreen
 import 'package:shieldher/screens/community_screen.dart';
 import 'package:shieldher/screens/record_screen.dart';
-import 'package:shieldher/widgets/app_header.dart';
 import 'package:shieldher/widgets/sos_button.dart';
 import 'package:shieldher/widgets/quick_action_button.dart';
+import 'package:shieldher/widgets/accessibility_warning_widget.dart'; // Import new widget
+import 'package:shieldher/widgets/app_header.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -208,29 +209,53 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      key: _scaffoldKey,
-      backgroundColor: Colors.grey.shade50, // Slight grey background for contrast
-      drawer: _buildDrawer(),
-      body: IndexedStack(
-        index: _currentIndex,
-        children: [
-          _buildHomeTab(),
-          CommunityScreen(
-            scaffoldKey: _scaffoldKey,
-            onNavigate: (index) => setState(() => _currentIndex = index),
-            onNotificationTap: _showNotificationsDialog,
-            notificationCount: _pendingInvites.length,
-          ),
-          _buildRecordTab(),
-          _buildProfileTab(),
-          LearnScreen(
-            scaffoldKey: _scaffoldKey,
-            onNotificationTap: _showNotificationsDialog,
-            notificationCount: _pendingInvites.length,
-            onNavigate: (index) => setState(() => _currentIndex = index),
-          ),
-        ],
+    // Intercept back button to minimize app on Home tab or switch to Home tab
+    return PopScope(
+      canPop: false, 
+      onPopInvoked: (didPop) async {
+        if (didPop) {
+          return;
+        }
+        if (_currentIndex == 0) {
+          // If on Home tab, minimize the app instead of closing it
+          try {
+            await platform.invokeMethod('minimizeApp');
+          } on PlatformException catch (e) {
+            debugPrint("Failed to minimize app: ${e.message}");
+            // Fallback: simple pop if native method fails
+            if (context.mounted) Navigator.of(context).pop();
+          }
+        } else {
+          // If on other tabs, go back to Home
+          setState(() => _currentIndex = 0);
+        }
+      },
+      child: Scaffold(
+        key: _scaffoldKey,
+        backgroundColor: Colors.grey.shade50, // Slight grey background for contrast
+        drawer: _buildDrawer(),
+        body: IndexedStack(
+          index: _currentIndex,
+          children: [
+            _buildHomeTab(),
+            CommunityScreen(
+              scaffoldKey: _scaffoldKey,
+              onNavigate: (index) => setState(() => _currentIndex = index),
+              onNotificationTap: _showNotificationsDialog,
+              notificationCount: _pendingInvites.length,
+            ),
+            _buildRecordTab(),
+            _buildProfileTab(),
+            LearnScreen(
+              scaffoldKey: _scaffoldKey,
+              onNotificationTap: _showNotificationsDialog,
+              notificationCount: _pendingInvites.length,
+              onNavigate: (index) => setState(() => _currentIndex = index),
+              isAccessibilityEnabled: _isAccessibilityEnabled,
+              onEnableAccessibility: _requestAccessibilityPermission,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -522,14 +547,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
               top: 70, // Below header approx
               left: 0,
               right: 0,
-              child: ClipRect(
-                child: SlideTransition(
-                  position: _slideAnimation,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 20, right: 20, top: 10, bottom: 20),
-                    child: _buildAccessibilityWarning(),
-                  ),
-                ),
+              child: AccessibilityWarningWidget(
+                onEnablePressed: _requestAccessibilityPermission,
+                onDismiss: () => setState(() => _showAccessibilityWarning = false),
               ),
             ),
         ],
@@ -656,119 +676,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     );
   }
 
-  Widget _buildAccessibilityWarning() {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20), // Stronger blur
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.85), // Higher opacity to hide background
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFC2185B).withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.privacy_tip_outlined, color: Color(0xFFC2185B), size: 24),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              "Permission Required",
-                              style: TextStyle(
-                                color: Color(0xFF880E4F),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                            InkWell(
-                              onTap: () => setState(() => _showAccessibilityWarning = false),
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.05),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(Icons.close, size: 16, color: Colors.black54),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          "Enable accessibility to allow SOS triggers when the screen is off.",
-                          style: TextStyle(color: Colors.black87, fontSize: 13, height: 1.3),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFC2185B), Color(0xFFAD1457)],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFC2185B).withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: ElevatedButton(
-                    onPressed: _requestAccessibilityPermission,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      shadowColor: Colors.transparent,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      elevation: 0,
-                    ),
-                    child: const Text(
-                      "Enable Now",
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+
 
   // ==================== OTHER TABS (Placeholders/Simplified) ====================
   Widget _buildRecordTab() {

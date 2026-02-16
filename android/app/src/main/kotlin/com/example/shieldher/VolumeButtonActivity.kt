@@ -1,7 +1,6 @@
 package com.example.shieldher
 
 import android.Manifest
-import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -126,6 +125,10 @@ class VolumeButtonActivity : FlutterActivity() {
                         result.error("INVALID_ARGS", "phone and message required", null)
                     }
                 }
+                "minimizeApp" -> {
+                    moveTaskToBack(true)
+                    result.success(true)
+                }
                 "checkAccessibilityPermission" -> {
                     result.success(isAccessibilityServiceEnabled())
                 }
@@ -237,19 +240,10 @@ class VolumeButtonActivity : FlutterActivity() {
     }
 
     private fun isAccessibilityServiceEnabled(): Boolean {
-        val expectedComponentName = ComponentName(this, VolumeAccessibilityService::class.java)
-        val enabledServicesSetting = android.provider.Settings.Secure.getString(
-            contentResolver,
-            android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-        ) ?: return false
-
-        val colonSplitter = android.text.TextUtils.SimpleStringSplitter(':')
-        colonSplitter.setString(enabledServicesSetting)
-
-        while (colonSplitter.hasNext()) {
-            val componentNameString = colonSplitter.next()
-            val enabledComponent = ComponentName.unflattenFromString(componentNameString)
-            if (enabledComponent != null && enabledComponent == expectedComponentName) {
+        val am = getSystemService(ACCESSIBILITY_SERVICE) as android.view.accessibility.AccessibilityManager
+        val enabledServices = am.getEnabledAccessibilityServiceList(android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+        for (service in enabledServices) {
+            if (service.id.contains(packageName) && service.id.contains("VolumeAccessibilityService")) {
                 return true
             }
         }
