@@ -19,15 +19,6 @@ ShieldHer is an innovative safety application designed to empower users, especia
 - 📍 **Trusted 'Bubble' & Live Tracking**: Create your secure community or "Bubble". Share your live whereabouts with trusted members via an interactive map ensuring someone always has your back.
 - 📚 **Safety Learning**: Access educational self-defense resources and safety tips directly through the app.
 
-## 📱 Screenshots
-*(Add screenshots of your application here)*
-
-| Home Screen | Emergency Contacts | Community / Bubble | Fake Call Screen |
-| :---: | :---: | :---: | :---: |
-| ![WhatsApp Image 2026-04-02 at 23 42 35](https://github.com/user-attachments/assets/a0702d3c-b1c2-4ddf-a304-3f1d349d57f5)
- | <img width="402" height="896" alt="image" src="https://github.com/user-attachments/assets/99d4f376-e8c6-4abb-81ea-b1413b42dc34" />
- | <img src="" width="200" /> | <img src="" width="200" /> |
-
 ## 🛠️ Tech Stack
 
 - **Frontend**: [Flutter](https://flutter.dev/) & Dart
