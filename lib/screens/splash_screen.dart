@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shieldher/auth_gate.dart';
 import 'package:shieldher/services/power_button_sos_service.dart';
+import 'package:shieldher/services/audio_recorder_service.dart';
+import 'package:shieldher/services/emergency_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -22,8 +25,8 @@ class _SplashScreenState extends State<SplashScreen> {
     // 1. Initialize Supabase
     try {
       await Supabase.initialize(
-        url: 'https://ddyqzkpkkdntkbnmiltq.supabase.co',
-        anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRkeXF6a3Bra2RudGtibm1pbHRxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzMzk1NjksImV4cCI6MjA4NTkxNTU2OX0.OqCZOFUHobY9dvDoNATetQBd-ojyqrVffvho6jnPayo',
+        url: dotenv.env['SUPABASE_URL'] ?? '',
+        anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
       );
     } catch (e) {
       // already initialized or error
@@ -32,6 +35,10 @@ class _SplashScreenState extends State<SplashScreen> {
 
     // 2. Initialize Power Button SOS Service (after Supabase is ready)
     PowerButtonSOSService().initialize();
+    
+    // 3. Sync any pending offline audio recordings AND contacts
+    await AudioRecorderService().syncPendingUploads();
+    await EmergencyService().syncPendingContacts();
 
     // 2. Minimum splash duration for branding (optional, keeps logo visible for at least 1.5s)
     await Future.delayed(const Duration(milliseconds: 800));

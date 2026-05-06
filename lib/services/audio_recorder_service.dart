@@ -6,6 +6,8 @@ import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shieldher/services/emergency_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 class AudioRecorderService {
   final AudioRecorder _audioRecorder = AudioRecorder();
@@ -48,9 +50,14 @@ class AudioRecorderService {
       // For web, record to a blob
       await _audioRecorder.start(config, path: '');
     } else {
-      // For mobile, record to a file
-      final dir = await getTemporaryDirectory();
-      final path = '${dir.path}/recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      // For mobile, record to a persistent file
+      final dir = await getApplicationDocumentsDirectory();
+      // Create a specific subdirectory for recordings to keep things organized
+      final recordingDir = Directory('${dir.path}/sos_recordings');
+      if (!await recordingDir.exists()) {
+        await recordingDir.create(recursive: true);
+      }
+      final path = '${recordingDir.path}/recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
       await _audioRecorder.start(config, path: path);
     }
 
@@ -71,59 +78,149 @@ class AudioRecorderService {
     return path;
   }
 
+  Future<void> syncPendingUploads() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? jsonString = prefs.getString('pending_audio_uploads');
+      if (jsonString == null) return;
+
+      List<dynamic> list = jsonDecode(jsonString);
+      List<Map<String, dynamic>> queue = List<Map<String, dynamic>>.from(list);
+      List<Map<String, dynamic>> remaining = [];
+
+      debugPrint('Sync pending uploads: ${queue.length} items');
+
+      for (var item in queue) {
+        final path = item['path'];
+        // Use a safe timestamp default if parsing fails
+        final timestamp = item['timestamp'] ?? DateTime.now().millisecondsSinceEpoch;
+        
+        try {
+          final file = File(path);
+          if (await file.exists()) {
+             // Generate filename consistent with original logic
+             final user = _supabase.auth.currentUser;
+             if (user != null) {
+                final fileName = '${user.id}/$timestamp.m4a';
+                await _uploadFileToSupabase(file, fileName, timestamp);
+                // On success, delete local file
+                await file.delete();
+                debugPrint('Offine upload success: $path');
+             } else {
+               remaining.add(item); // User not logged in, keep in queue
+             }
+          } else {
+            debugPrint('Pending file not found, removing from queue: $path');
+          }
+        } catch (e) {
+          debugPrint('Retry upload failed for $path: $e');
+          remaining.add(item); // Keep in queue
+        }
+      }
+
+      // Update queue
+      if (remaining.isNotEmpty) {
+        await prefs.setString('pending_audio_uploads', jsonEncode(remaining));
+      } else {
+        await prefs.remove('pending_audio_uploads');
+      }
+
+    } catch (e) {
+      debugPrint('Error syncing pending uploads: $e');
+    }
+  }
+
+  Future<void> _addToUploadQueue(String filePath, int timestamp) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? jsonString = prefs.getString('pending_audio_uploads');
+      List<Map<String, dynamic>> queue = [];
+      
+      if (jsonString != null) {
+         final List<dynamic> list = jsonDecode(jsonString);
+         queue = List<Map<String, dynamic>>.from(list);
+      }
+      
+      queue.add({
+        'path': filePath,
+        'timestamp': timestamp,
+      });
+      
+      await prefs.setString('pending_audio_uploads', jsonEncode(queue));
+      debugPrint('Added recording to offline queue: $filePath');
+    } catch (e) {
+      debugPrint('Error adding to upload queue: $e');
+    }
+  }
+
+  // Refactored primitive upload function
+  Future<String> _uploadFileToSupabase(File file, String fileName, int timestamp) async {
+    final bucket = 'audio_recordings';
+    await _supabase.storage.from(bucket).upload(fileName, file);
+    
+    final downloadUrl = _supabase.storage.from(bucket).getPublicUrl(fileName);
+      
+    // Fetch location (might be outdated if offline, but better than nothing)
+    // In a real offline scenario, we should have cached the location with the recording metadata.
+    // For now, valid location or null is acceptable.
+    final Position? position = await EmergencyService().getCurrentLocation();
+      
+    // Convert to IST (UTC + 5:30)
+    final dateUtc = DateTime.fromMillisecondsSinceEpoch(timestamp, isUtc: true);
+    final dateIst = dateUtc.add(const Duration(hours: 5, minutes: 30));
+    final formattedDate = "${dateIst.year}-${dateIst.month.toString().padLeft(2, '0')}-${dateIst.day.toString().padLeft(2, '0')}";
+    final formattedTime = "${dateIst.hour.toString().padLeft(2, '0')}:${dateIst.minute.toString().padLeft(2, '0')}:${dateIst.second.toString().padLeft(2, '0')}";
+      
+    await _saveToSupabase(
+      _supabase.auth.currentUser!.id, 
+      downloadUrl, 
+      fileName: 'Audio $formattedDate $formattedTime',
+      latitude: position?.latitude,
+      longitude: position?.longitude,
+    );
+    return downloadUrl;
+  }
+
   Future<String?> uploadToSupabase(String? filePath, {DateTime? startTime}) async {
     if (filePath == null || filePath.isEmpty) return null;
 
     final user = _supabase.auth.currentUser;
     if (user == null) {
-      throw Exception('User not authenticated');
+      throw Exception('User not authenticated'); // Cannot upload or queue without user ID context practically
     }
+
+    // Try to sync old items first
+    syncPendingUploads();
 
     // Use provided start time or current time
     final timestamp = (startTime ?? DateTime.now()).millisecondsSinceEpoch;
     final fileName = '${user.id}/$timestamp.m4a';
-    final bucket = 'audio_recordings';
 
     try {
       if (kIsWeb) {
-        // For web, the path is a blob URL, but for Supabase we need bytes
-        // But record package on web returns blob URL. fetching bytes from blob URL might be tricky in dart without dart:html
-        // Actually, Supabase storage uploadBinary accepts Uint8List.
-        // We might need to fetch the blob data.
-        // However, record package returns a Blob URL on web.
-        // A simpler way for web might be to rely on the fact that we can't easily read blob from url in plain dart IO.
-        // But let's try to assume we can get bytes.
-        // NOTE: 'record' on web returns a blob URI.
-        throw Exception("Web upload not fully implemented in this migration snippet without extra http call to get blob data");
+        throw Exception("Web upload not supported in offline mode yet");
       } else {
         final file = File(filePath);
         if (!file.existsSync()) {
              throw Exception('File not found at path: $filePath');
         }
-        await _supabase.storage.from(bucket).upload(fileName, file);
+        
+        // Return URL on success
+        final url = await _uploadFileToSupabase(file, fileName, timestamp);
+        
+        // If successful, we can delete the local persistent file to save space?
+        // User asked to "delete from local" on success.
+        try { await file.delete(); } catch (_) {}
+        
+        return url;
       }
-      
-      final downloadUrl = _supabase.storage.from(bucket).getPublicUrl(fileName);
-      
-      // Fetch location
-      final Position? position = await EmergencyService().getCurrentLocation();
-      
-      // Convert to IST (UTC + 5:30)
-      final dateUtc = DateTime.fromMillisecondsSinceEpoch(timestamp, isUtc: true);
-      final dateIst = dateUtc.add(const Duration(hours: 5, minutes: 30));
-      final formattedDate = "${dateIst.year}-${dateIst.month.toString().padLeft(2, '0')}-${dateIst.day.toString().padLeft(2, '0')}";
-      final formattedTime = "${dateIst.hour.toString().padLeft(2, '0')}:${dateIst.minute.toString().padLeft(2, '0')}:${dateIst.second.toString().padLeft(2, '0')}";
-      
-      await _saveToSupabase(
-        user.id, 
-        downloadUrl, 
-        fileName: 'Audio $formattedDate $formattedTime',
-        latitude: position?.latitude,
-        longitude: position?.longitude,
-      );
-      return downloadUrl;
     } catch (e) {
-      throw Exception('Failed to upload audio: $e');
+      debugPrint('Upload failed, queuing for offline: $e');
+      // Queue for later
+      if (!kIsWeb) {
+         await _addToUploadQueue(filePath, timestamp);
+      }
+      return null;
     }
   }
 

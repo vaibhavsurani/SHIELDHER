@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 class EmergencyContact {
   final String id;
@@ -37,36 +39,75 @@ class EmergencyService {
 
   String? get _userId => _supabase.auth.currentUser?.id;
 
-  // Get contacts
+  // Get contacts with offline support
   Future<List<EmergencyContact>> getContacts() async {
     if (_userId == null) return [];
 
     try {
+      // 1. Try Network
       final data = await _supabase
           .from('emergency_contacts')
           .select()
           .eq('user_id', _userId!);
       
       final List<dynamic> dataList = data as List<dynamic>;
-      return dataList.map((json) => EmergencyContact.fromJson(json)).toList();
+      final contacts = dataList.map((json) => EmergencyContact.fromJson(json)).toList();
+
+      // 2. Save to Cache
+      await _cacheContacts(contacts);
+      
+      return contacts;
     } catch (e) {
-      debugPrint('Error fetching contacts: $e');
-      return [];
+      debugPrint('Error fetching contacts from network: $e');
+      // 3. Fallback to Cache
+      return await _getCachedContacts();
     }
+  }
+
+  Future<void> _cacheContacts(List<EmergencyContact> contacts) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String jsonString = jsonEncode(contacts.map((c) => c.toJson()).toList());
+      await prefs.setString('cached_emergency_contacts', jsonString);
+    } catch (e) {
+      debugPrint('Error caching contacts: $e');
+    }
+  }
+
+  Future<List<EmergencyContact>> _getCachedContacts() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? jsonString = prefs.getString('cached_emergency_contacts');
+      
+      if (jsonString != null) {
+        final List<dynamic> jsonList = jsonDecode(jsonString);
+        return jsonList.map((json) => EmergencyContact.fromJson(json)).toList();
+      }
+    } catch (e) {
+      debugPrint('Error reading cached contacts: $e');
+    }
+    return [];
   }
 
   // Add a new emergency contact
   Future<bool> addContact(String name, String phone) async {
     if (_userId == null) return false;
 
+    // Use cached contacts for the limit check to support offline
     final contacts = await getContacts();
     if (contacts.length >= maxContacts) {
       return false;
     }
 
-    // Assuming we have a table 'emergency_contacts' with fields: id (uuid/string), user_id, name, phone
     final id = DateTime.now().millisecondsSinceEpoch.toString();
+    final newContact = EmergencyContact(id: id, name: name, phone: phone);
+
+    // Optimized: Add to local cache immediately (Optimistic UI)
+    contacts.add(newContact);
+    await _cacheContacts(contacts);
+
     try {
+      // Try Network Insert
       await _supabase.from('emergency_contacts').insert({
         'id': id,
         'user_id': _userId,
@@ -75,8 +116,69 @@ class EmergencyService {
       });
       return true;
     } catch (e) {
-      debugPrint('Error adding contact: $e');
-      return false;
+      debugPrint('Network add failed, queuing for sync: $e');
+      // Network failed? We already added to cache, so it works offline.
+      // We should queue this for later sync.
+      await _addToContactUploadQueue(newContact);
+      return true; // Return true so UI shows success!
+    }
+  }
+
+  Future<void> _addToContactUploadQueue(EmergencyContact contact) async {
+     try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? jsonString = prefs.getString('pending_contact_uploads');
+      List<EmergencyContact> queue = [];
+      
+      if (jsonString != null) {
+         final List<dynamic> list = jsonDecode(jsonString);
+         queue = list.map((json) => EmergencyContact.fromJson(json)).toList();
+      }
+      
+      queue.add(contact);
+      
+      final String newJsonString = jsonEncode(queue.map((c) => c.toJson()).toList());
+      await prefs.setString('pending_contact_uploads', newJsonString);
+    } catch (e) {
+      debugPrint('Error queuing contact: $e');
+    }
+  }
+
+  Future<void> syncPendingContacts() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? jsonString = prefs.getString('pending_contact_uploads');
+      if (jsonString == null) return;
+
+      List<dynamic> list = jsonDecode(jsonString);
+      List<EmergencyContact> queue = list.map((json) => EmergencyContact.fromJson(json)).toList();
+      List<EmergencyContact> remaining = [];
+
+      debugPrint('Sync pending contacts: ${queue.length} items');
+
+      for (var contact in queue) {
+        try {
+           await _supabase.from('emergency_contacts').insert({
+            'id': contact.id,
+            'user_id': _userId,
+            'name': contact.name,
+            'phone': contact.phone,
+          });
+        } catch (e) {
+           debugPrint('Retry add contact failed: $e');
+           remaining.add(contact);
+        }
+      }
+
+      if (remaining.isNotEmpty) {
+         final String newJsonString = jsonEncode(remaining.map((c) => c.toJson()).toList());
+         await prefs.setString('pending_contact_uploads', newJsonString);
+      } else {
+         await prefs.remove('pending_contact_uploads');
+      }
+
+    } catch (e) {
+      debugPrint('Error syncing contacts: $e');
     }
   }
 

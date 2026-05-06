@@ -38,36 +38,44 @@ class PowerButtonSOSService {
   /// Execute emergency actions based on level
   Future<void> _executeEmergency(int level) async {
     try {
-      // Level 1: SMS + WhatsApp with location
+      final List<Future> tasks = [];
+
+      // Level 1: SMS + WhatsApp (Parallel)
       if (level >= 1) {
-        await _sendSOSMessages();
+        tasks.add(_sendSOSMessages());
       }
 
-      // Level 2: + Call all emergency contacts
+      // Level 2: + Cascade Calling (Parallel to messages)
       if (level >= 2) {
-        await _callAllContacts();
+        tasks.add(_startCascadeCalling());
       }
 
-      // Level 3: + Auto audio recording
+      // Level 3: + Auto audio recording (Parallel)
       if (level >= 3) {
-        await _startAutoRecording();
+        tasks.add(_startAutoRecording());
       }
+      
+      // Fire all tasks concurrently
+      await Future.wait(tasks);
 
-      debugPrint('🆘 Emergency Level $level actions completed');
+      debugPrint('🆘 Emergency Level $level actions initiated');
     } catch (e) {
       debugPrint('🆘 Error executing emergency: $e');
     }
   }
 
-  /// Level 1: Send SOS via SMS and WhatsApp
+  /// Level 1: Send SOS via SMS and WhatsApp concurrently
   Future<void> _sendSOSMessages() async {
-    debugPrint('🆘 Level 1: Sending SOS SMS + WhatsApp...');
+    debugPrint('🆘 Level 1: Sending SOS SMS + WhatsApp concurrently...');
     
-    // Send SMS (uses existing EmergencyService)
-    final smsSent = await _emergencyService.sendSOSAutomatic();
-    debugPrint('🆘 SMS sent: $smsSent');
+    // 1. Send SMS (Fire and forget from main flow view)
+    
+    _emergencyService.sendSOSAutomatic().then((sent) {
+        debugPrint('🆘 SMS result: $sent');
+    });
+    
 
-    // Send WhatsApp to all contacts
+    // 2. Send WhatsApp to all contacts concurrently
     final contacts = await _emergencyService.getContacts();
     final userName = await _emergencyService.getUserName();
     final position = await _emergencyService.getCurrentLocation();
@@ -80,39 +88,55 @@ class PowerButtonSOSService {
       message = '🆘 EMERGENCY SOS from $userName! I need help immediately! Location unavailable.';
     }
 
+    // Fire WhatsApp intents closely together
+    // The delay is small just to ensure order if system is slow, but much faster than before
     for (final contact in contacts) {
-      try {
-        await _methodsChannel.invokeMethod('sendWhatsApp', {
-          'phone': contact.phone,
-          'message': message,
-        });
-        // Small delay between WhatsApp messages to avoid overwhelming
-        await Future.delayed(const Duration(milliseconds: 1500));
-      } catch (e) {
+      _methodsChannel.invokeMethod('sendWhatsApp', {
+        'phone': contact.phone,
+        'message': message,
+      }).catchError((e) {
         debugPrint('🆘 WhatsApp to ${contact.name} failed: $e');
-      }
+      });
+      
+      // Minimal delay to let the intent fire
+      await Future.delayed(const Duration(milliseconds: 500)); 
     }
   }
 
-  /// Level 2: Call all emergency contacts
-  Future<void> _callAllContacts() async {
-    debugPrint('🆘 Level 2: Calling all emergency contacts...');
-    
+  /// Level 2: Cascade Calling (Sequential with Timeout)
+  Future<void> _startCascadeCalling() async {
+    debugPrint('🆘 Level 2: Starting Cascade Calling...');
     final contacts = await _emergencyService.getContacts();
     
-    for (final contact in contacts) {
-      try {
-        debugPrint('🆘 Calling ${contact.name} (${contact.phone})...');
-        await _methodsChannel.invokeMethod('makePhoneCall', {
-          'phone': contact.phone,
-        });
-        // Wait a bit between calls - user needs to end each call
-        // In practice, only the first call can be made automatically
-        await Future.delayed(const Duration(seconds: 2));
-      } catch (e) {
-        debugPrint('🆘 Call to ${contact.name} failed: $e');
-      }
+    if (contacts.isEmpty) {
+        debugPrint('🆘 No contacts to call.');
+        return;
     }
+
+    for (int i = 0; i < contacts.length; i++) {
+        final contact = contacts[i];
+        debugPrint('🆘 Cascade Call ${i+1}/${contacts.length}: Calling ${contact.name}...');
+        
+        try {
+            await _methodsChannel.invokeMethod('makePhoneCall', {
+                'phone': contact.phone,
+            });
+        } catch (e) {
+            debugPrint('🆘 Call failed: $e');
+        }
+
+        // If this is the last contact, we don't need to wait
+        if (i == contacts.length - 1) break;
+
+        debugPrint('🆘 Waiting 30s before calling next contact (if needed)...');
+        // Wait 30 seconds before dialing the next person
+        // If the user is on the phone, the OS handles the new dial request (usually creating a queue or replacing)
+        // Ideally, we'd detect "Call Ended" state, but without READ_PHONE_STATE (high risk permission),
+        // a timer is the most reliable fallback.
+        await Future.delayed(const Duration(seconds: 30));
+    }
+    
+    debugPrint('🆘 Cascade Calling sequence finished.');
   }
 
   /// Level 3: Start auto audio recording loop (3 chunks of 15s)
